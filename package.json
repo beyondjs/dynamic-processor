@@ -2,12 +2,13 @@
   "name": "@beyond-js/dynamic-processor",
   "author": "BeyondJS",
   "email": "hello@beyondjs.com",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "license": "MIT",
   "repository": "https://github.com/beyondjs/dynamic-processor",
   "exports": {
     ".": "./index.js"
   },
   "dependencies": {
+    "@beyond-js/pending-promise": "^0.0.1"
   }
 }
