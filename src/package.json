@@ -2,7 +2,7 @@
 	"name": "@beyond-js/dynamic-processor",
 	"author": "BeyondJS",
 	"email": "hello@beyondjs.com",
-	"version": "0.0.4",
+	"version": "0.0.5",
 	"license": "MIT",
 	"repository": "https://github.com/beyondjs/dynamic-processor",
 	"exports": {
