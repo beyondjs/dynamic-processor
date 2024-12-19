@@ -9,6 +9,7 @@
 		".": "./index.js"
 	},
 	"dependencies": {
-		"@beyond-js/pending-promise": "^0.0.1"
+		"@beyond-js/pending-promise": "^0.0.1",
+		"colors": "1.4.0"
 	}
 }
