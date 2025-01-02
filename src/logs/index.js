@@ -1,6 +1,8 @@
 const fs = require('fs').promises;
 require('colors');
 
+let incremental = 0;
+
 module.exports = new (class {
 	#ready = false;
 	#stream;
@@ -19,7 +21,7 @@ module.exports = new (class {
 	};
 
 	async #initialise() {
-		const name = `dp-${process.pid}.log`;
+		const name = `dp-${process.pid}-${incremental++}.log`;
 		const dirname = require('path').join(process.cwd(), '.beyond/dps');
 		const store = (this.#store = require('path').join(dirname, name));
 
