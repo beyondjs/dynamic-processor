@@ -1,5 +1,5 @@
 const { EventEmitter } = require('events');
-const PendingPromise = require('@beyond-js/pending-promise');
+const { PendingPromise } = require('@beyond-js/pending-promise/main');
 
 const Nothing = class {};
 
