@@ -1,4 +1,4 @@
-# @beyond-js/config
+# @beyond-js/dynamic-processor
 
 ## Introduction
 
