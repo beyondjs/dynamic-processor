@@ -1,4 +1,4 @@
-module.exports = function (child, name) {
+export default function (child, name) {
 	if (name && typeof name !== 'string') throw new Error('Invalid child name specification');
 
 	const nameText = name ? `"${name}" ` : '';
@@ -13,4 +13,4 @@ module.exports = function (child, name) {
 	if (!child.dp) {
 		throw new Error(`${error} Child ${nameText}must have the property .dp set`);
 	}
-};
+}

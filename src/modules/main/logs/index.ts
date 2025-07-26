@@ -3,7 +3,7 @@ require('colors');
 
 let incremental = 0;
 
-module.exports = new (class {
+export default new (class {
 	#ready = false;
 	#stream;
 	#error;

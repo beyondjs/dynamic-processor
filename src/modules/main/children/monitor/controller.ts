@@ -6,7 +6,7 @@
  * Ex: In the ts compiler, the compiler depends on the analyzer in the same way that dependencies.declarations
  * depends on the analyzer as well.
  */
-module.exports = class {
+export default class {
 	#dp;
 	#monitor;
 
@@ -47,4 +47,4 @@ module.exports = class {
 	invalidate() {
 		this.#state.clear();
 	}
-};
+}

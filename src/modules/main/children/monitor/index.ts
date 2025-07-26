@@ -1,4 +1,4 @@
-module.exports = class extends Map {
+export default class extends Map {
 	#dp;
 	#children;
 	#ready;
@@ -124,4 +124,4 @@ module.exports = class extends Map {
 	destroy() {
 		this.forEach(mchild => mchild.destroy());
 	}
-};
+}

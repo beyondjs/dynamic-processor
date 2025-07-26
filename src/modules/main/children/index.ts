@@ -1,4 +1,8 @@
-module.exports = class extends require('./registered') {
+import Registered from './registered';
+import Required from './required';
+import Monitor from './monitor';
+
+export /*bundle*/ class DynamicProcessor extends Registered {
 	#required;
 	get required() {
 		return this.#required;
@@ -21,8 +25,8 @@ module.exports = class extends require('./registered') {
 	 */
 	constructor(dp, ready) {
 		super(dp);
-		this.#required = new (require('./required'))(dp);
-		this.#monitor = new (require('./monitor'))(dp, this, ready);
+		this.#required = new Required(dp);
+		this.#monitor = new Monitor(dp, this, ready);
 	}
 
 	/**
@@ -56,4 +60,4 @@ module.exports = class extends require('./registered') {
 	destroy() {
 		this.#monitor.destroy();
 	}
-};
+}

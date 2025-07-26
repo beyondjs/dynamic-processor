@@ -1,4 +1,4 @@
-module.exports = class extends Map {
+export default class extends Map {
 	#dp;
 	get dp() {
 		return this.#dp;
@@ -50,4 +50,4 @@ module.exports = class extends Map {
 
 		invalidate && changed && this.#dp._invalidate();
 	}
-};
+}

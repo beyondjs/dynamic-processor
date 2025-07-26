@@ -1,6 +1,6 @@
-require('colors');
+import 'colors';
 
-module.exports = class {
+export default class {
 	#children;
 	#timer;
 	#delay;
@@ -60,4 +60,4 @@ module.exports = class {
 		clearTimeout(this.#timer);
 		this.#timer = this.#onhold = void 0;
 	}
-};
+}

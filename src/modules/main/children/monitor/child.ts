@@ -1,4 +1,4 @@
-module.exports = class {
+export default class {
 	#child;
 	get child() {
 		return this.#child;
@@ -18,4 +18,4 @@ module.exports = class {
 	destroy() {
 		this.#child.off('change', this.#onchange);
 	}
-};
+}

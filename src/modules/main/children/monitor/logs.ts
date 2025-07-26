@@ -6,7 +6,7 @@ const log = { disabled: true, identifiers: false };
  * @param dp {object} The parent dynamic processor
  * @param child {object} The child processor
  */
-module.exports = function (dp, child) {
+export default function (dp, child) {
 	if (log.disabled) return;
 
 	let pass = 0;
@@ -26,4 +26,4 @@ module.exports = function (dp, child) {
 			(child ? `\tEmitted by: "${child.dp.bold}":"${child.id ? child.id : 'no child id'}". ` : '') +
 			identifiers
 	);
-};
+}

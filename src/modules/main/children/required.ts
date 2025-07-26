@@ -1,4 +1,4 @@
-module.exports = class extends Map {
+export default /*bundle*/ class extends Map {
 	#children;
 
 	constructor(children) {
@@ -21,4 +21,4 @@ module.exports = class extends Map {
 	reset() {
 		super.clear();
 	}
-};
+}
