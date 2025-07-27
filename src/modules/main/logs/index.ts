@@ -1,41 +1,46 @@
-const fs = require('fs').promises;
-require('colors');
+import type { WriteStream } from 'fs';
+import * as fs from 'fs';
+import { join } from 'path';
+import 'colors';
+
+const { createWriteStream } = fs;
+const { access, unlink, mkdir } = fs.promises;
 
 let incremental = 0;
 
 export default new (class {
 	#ready = false;
-	#stream;
-	#error;
+	#stream!: WriteStream;
+	#error = false;
 
-	#store;
+	#store!: string;
 	get store() {
 		return this.#store;
 	}
 
-	#onerror = error => {
+	#onerror = (error: Error | undefined) => {
 		if (!error) return;
 
 		this.#error = true;
 		console.error('Error found writing dynamic processors logs'.red);
 	};
 
-	async #initialise() {
+	async #initialise(): Promise<void> {
 		const name = `dp-${process.pid}-${incremental++}.log`;
-		const dirname = require('path').join(process.cwd(), '.beyond/dps');
-		const store = (this.#store = require('path').join(dirname, name));
+		const dirname = join(process.cwd(), '.beyond/dps');
+		const store = (this.#store = join(dirname, name));
 
 		let exists;
 		try {
-			await fs.access(store);
+			await access(store);
 			exists = true;
 		} catch (exc) {
 			exists = false;
 		}
 
-		exists ? await fs.unlink(store) : await fs.mkdir(dirname, { recursive: true });
+		exists ? await unlink(store) : await mkdir(dirname, { recursive: true });
 
-		this.#stream = require('fs').createWriteStream(store);
+		this.#stream = createWriteStream(store);
 		this.#stream.write('Dynamic processors logs:\n\n', this.#onerror);
 
 		this.#unsaved.forEach(message => this.#stream.write(message, this.#onerror));
@@ -47,9 +52,9 @@ export default new (class {
 		this.#initialise().catch(exc => console.log(exc.stack));
 	}
 
-	#unsaved = [];
+	#unsaved: string[] = [];
 
-	append(message) {
+	append(message: string) {
 		if (!this.#ready) {
 			this.#unsaved.push(message);
 			return;

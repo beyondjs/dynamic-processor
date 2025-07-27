@@ -1,11 +1,7 @@
-export default /*bundle*/ class extends Map {
-	#children;
+import type { DynamicProcessorInstance } from '..';
+import type { Children } from '.';
 
-	constructor(children) {
-		super();
-		this.#children = children;
-	}
-
+export default /*bundle*/ class extends Map<DynamicProcessorInstance, { id: string }> {
 	/**
 	 * The pendings are registered when the check(dp) function is called in the _prepared method
 	 * If the processor that is being requested is not processed, then it is registered as a pending dp
@@ -13,7 +9,7 @@ export default /*bundle*/ class extends Map {
 	 * @param child {object} The required dp
 	 * @param data {{id: string}} Information provided when the check function is called
 	 */
-	register(child, data) {
+	register(child: DynamicProcessorInstance, data: { id: string }) {
 		require('./validate-child')(child);
 		this.set(child, data);
 	}

@@ -1,18 +1,93 @@
-const { EventEmitter } = require('events');
-const { PendingPromise } = require('@beyond-js/pending-promise/main');
+import { EventEmitter } from 'events';
+import { PendingPromise } from '@beyond-js/pending-promise/main';
+import { Children, ChildrenType } from './children';
 
+// A generic Constructor type to represent any class constructor
+type Constructor<T = {}> = new (...args: any[]) => T;
+
+// A default base class in case no Base is provided
 const Nothing = class {};
+
+// Get the class returned by the factory
+type DynamicProcessorType = ReturnType<typeof DynamicProcessor>;
+
+// Get the instance type of the dynamically created class
+export type DynamicProcessorInstance = InstanceType<DynamicProcessorType>;
+
+type Listener = (...args: any[]) => any;
 
 let autoincremental = { id: 0, request: 0 };
 
 // A registry of all Dynamic Processors created across the instance of the engine
-const registry = new Set();
+const registry: Set<DynamicProcessorInstance> = new Set();
 
-// noinspection JSPotentiallyInvalidUsageOfThis
-module.exports = (Base = Nothing) =>
-	class extends Base {
+type RequireType = (dp: DynamicProcessorInstance, id: string) => boolean;
+
+interface IRequest {
+	is: 'dynamic-processor';
+	value: number;
+}
+
+/**
+ * DynamicProcessor is a base class for creating dynamic processors.
+ * It provides a structure for managing child processors, handling events,
+ * and processing data in a dynamic way.
+ *
+ * @param Base {object} - The base class to extend from. Defaults to Nothing if not provided.
+ */
+export const DynamicProcessor = <TBase extends Constructor>(Base: TBase = Nothing as TBase) =>
+	class DynamicProcessor extends Base {
+		get dp(): string {
+			throw new Error('Getter .dp must return a string');
+		}
+
+		#autoincremented = autoincremental.id++;
+		get autoincremented() {
+			return this.#autoincremented;
+		}
+
+		// This method can be overridden
+		// It should return a string that identifies the dynamic processor
+		// If not overridden, it will return the autoincremented id
+		// This is useful for debugging purposes and to identify the dynamic processor in the registry
+		get id(): string {
+			return this.autoincremented.toString();
+		}
+
+		// ms to wait to process after invalidation
+		waitToProcess = 0;
+		// Execute _notify method on first processing
+		notifyOnFirst = false;
+
+		#children: Children;
+		get children() {
+			return this.#children;
+		}
+
+		/**
+		 * Dynamic processor setup
+		 *
+		 * @param children {ChildrenType} The children to register
+		 */
+		setup(children: ChildrenType) {
+			this.#children.register(children, false);
+		}
+
+		// Is a property that is defined only when processing and before initialised
+		#ready: PendingPromise<void> = new PendingPromise();
+		get ready() {
+			if (this.#processed || this.#destroyed) return Promise.resolve();
+
+			this.#ready = this.#ready || new PendingPromise();
+
+			// Initialization triggers processing, and promise resolution
+			!this.#initialising && !this.#initialised && this.initialise().catch(exc => console.error(exc.stack));
+			return this.#ready;
+		}
+		#logs;
+
 		_events = new EventEmitter();
-		on = (event, listener) => {
+		on = (event: string, listener: Listener) => {
 			// To find if a dynamic processor hasn't set the maxListeners correctly
 			const count = this._events.listenerCount(event);
 			const max = this._events.getMaxListeners();
@@ -39,60 +114,17 @@ module.exports = (Base = Nothing) =>
 
 			this._events.on(event, listener);
 		};
-		off = (event, listener) => this._events.off(event, listener);
+		off = (event: string, listener: Listener) => this._events.off(event, listener);
 		removeALlListeners = () => this._events.removeAllListeners();
-		setMaxListeners = n => this._events.setMaxListeners(n);
+		setMaxListeners = (n: number) => this._events.setMaxListeners(n);
 
-		// ms to wait to process after invalidation
-		waitToProcess = 0;
-		// Execute _notify method on first processing
-		notifyOnFirst = false;
-
-		#autoincremented = autoincremental.id++;
-		get autoincremented() {
-			return this.#autoincremented;
-		}
-
-		#children;
-		get children() {
-			return this.#children;
-		}
-
-		#logs;
-
-		/**
-		 * Dynamic processor setup
-		 *
-		 * @param children {Map<string, {child: object}>} A map of children properties
-		 * where the key is the child object and the value is the specification object
-		 */
-		setup(children) {
-			this.#children.register(children, false, true);
-		}
-
-		// Is a property that is defined only when processing and before initialised
-		#ready = new PendingPromise();
-		get ready() {
-			if (this.#processed || this.#destroyed) return Promise.resolve();
-
-			this.#ready = this.#ready || new PendingPromise();
-
-			// Initialization triggers processing, and promise resolution
-			!this.#initialising && !this.#initialised && this.initialise().catch(exc => console.error(exc.stack));
-			return this.#ready;
-		}
-
-		constructor(...params) {
+		constructor(...params: any[]) {
 			super(...params);
 			registry.add(this);
 
-			this.#children = new (require('./children'))(this, this.#preprocess);
+			this.#children = new Children(this, this.#preprocess);
 			this.setMaxListeners(500);
 			this.#logs = require('./logs');
-		}
-
-		get waiting() {
-			return this.#children.waiting;
 		}
 
 		#initialising = false;
@@ -124,22 +156,24 @@ module.exports = (Base = Nothing) =>
 		}
 
 		// The processor is processing, specifically in the preparation phase
-		#preparing;
+		#preparing: boolean;
 		get preparing() {
 			return this.#preparing;
 		}
 
-		// This method should be overridden
-		_prepared() {}
+		_prepared(require: RequireType): boolean | string | undefined {
+			void require;
+			return;
+		}
 
 		// Is the processor prepared to process?
 		// If not prepared, the promise will be kept pending, and will be processed at the next invalidation.
-		get __prepared() {
+		get __prepared(): boolean | string {
 			this.#preparing = true;
 			this.#children.reset();
 
 			// Check if dynamic processor is processed, but also initialise it if it wasn't previously initialised
-			const require = (dp, id) => {
+			const require: RequireType = (dp, id) => {
 				this.#children.require(dp, { id });
 				return dp.processed;
 			};
@@ -174,22 +208,21 @@ module.exports = (Base = Nothing) =>
 		}
 
 		// This method should be overridden
-		async _process(request) {
+		async _process(request: IRequest): Promise<void | boolean | { notify?: boolean; changed?: boolean }> {
 			void request;
 		}
 
-		#tu;
+		#tu: number;
 		get tu() {
 			return this.#tu;
 		}
 
-		#request;
-
+		#request: IRequest;
 		get _request() {
 			return this.#request;
 		}
 
-		cancelled(request) {
+		cancelled(request: IRequest) {
 			return this.#request !== request;
 		}
 
@@ -231,7 +264,7 @@ module.exports = (Base = Nothing) =>
 			 *
 			 * @param pr? {boolean | {changed: boolean, notify: boolean}} The process response
 			 */
-			const done = pr => {
+			const done = (pr?: boolean | { notify?: boolean; changed?: boolean }): void => {
 				if (this.#request !== request) return;
 
 				pr = typeof pr === 'object' ? pr : { notify: pr, changed: pr };

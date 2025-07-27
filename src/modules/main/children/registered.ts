@@ -1,10 +1,13 @@
+import type { DynamicProcessorInstance } from '..';
+import type { ChildrenType } from '.';
+
 export default class extends Map {
-	#dp;
+	#dp: DynamicProcessorInstance;
 	get dp() {
 		return this.#dp;
 	}
 
-	constructor(dp) {
+	constructor(dp: DynamicProcessorInstance) {
 		super();
 		this.#dp = dp;
 	}
@@ -15,7 +18,7 @@ export default class extends Map {
 	 * @param children {Map<string, object>} The children specification
 	 * @param invalidate {boolean} If true, invalidates the dp after the registration of the children
 	 */
-	register(children, invalidate) {
+	register(children: ChildrenType, invalidate: boolean = false) {
 		if (!children) return;
 		if (!(children instanceof Map)) throw new Error('Invalid parameters');
 
@@ -38,7 +41,7 @@ export default class extends Map {
 		changed && invalidate && this.#dp._invalidate();
 	}
 
-	unregister(children, invalidate = true) {
+	unregister(children: ChildrenType, invalidate = true) {
 		if (!(children instanceof Array)) throw new Error('Invalid parameters');
 
 		let changed = false;

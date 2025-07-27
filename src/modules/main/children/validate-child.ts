@@ -1,4 +1,13 @@
-export default function (child, name) {
+import type { DynamicProcessorInstance } from '..';
+
+/**
+ * Validates that the given child conforms to the expected DynamicProcessor shape.
+ *
+ * @param child - The object to validate as a dynamic processor.
+ * @param name - Optional name for contextual error messages.
+ * @throws Will throw if the child is invalid or misconfigured.
+ */
+export default function (child: DynamicProcessorInstance, name?: string) {
 	if (name && typeof name !== 'string') throw new Error('Invalid child name specification');
 
 	const nameText = name ? `"${name}" ` : '';

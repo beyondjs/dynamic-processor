@@ -8,5 +8,8 @@
 	"dependencies": {
 		"@beyond-js/pending-promise": "~0.0.4",
 		"colors": "1.4.0"
+	},
+	"devDependencies": {
+		"@types/node": "~20.11.0"
 	}
 }
