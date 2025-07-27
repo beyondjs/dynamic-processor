@@ -1,7 +1,7 @@
 import type { WriteStream } from 'fs';
 import * as fs from 'fs';
 import { join } from 'path';
-import 'colors';
+import * as colors from 'colors';
 
 const { createWriteStream } = fs;
 const { access, unlink, mkdir } = fs.promises;

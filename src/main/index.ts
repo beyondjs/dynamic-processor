@@ -35,7 +35,7 @@ interface IRequest {
  *
  * @param Base {object} - The base class to extend from. Defaults to Nothing if not provided.
  */
-export const DynamicProcessor = <TBase extends Constructor>(Base: TBase = Nothing as TBase) =>
+export /*bundle*/ const DynamicProcessor = <TBase extends Constructor>(Base: TBase = Nothing as TBase) =>
 	class DynamicProcessor extends Base {
 		get dp(): string {
 			throw new Error('Getter .dp must return a string');

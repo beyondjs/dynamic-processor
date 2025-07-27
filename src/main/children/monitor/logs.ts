@@ -1,3 +1,5 @@
+import type { DynamicProcessorInstance } from '../..';
+
 const log = { disabled: true, identifiers: false };
 
 /**
@@ -6,7 +8,7 @@ const log = { disabled: true, identifiers: false };
  * @param dp {object} The parent dynamic processor
  * @param child {object} The child processor
  */
-export default function (dp, child) {
+export default function (dp: DynamicProcessorInstance, child?: DynamicProcessorInstance) {
 	if (log.disabled) return;
 
 	let pass = 0;

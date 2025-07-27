@@ -1,3 +1,6 @@
+import type { DynamicProcessorInstance } from '../..';
+import type Monitor from '.';
+
 /**
  * Avoid reprocessing the dp when the request ids of the children are the same as the last processing performed.
  * It occurs when the children are linked to each other.
@@ -7,8 +10,8 @@
  * depends on the analyzer as well.
  */
 export default class {
-	#dp;
-	#monitor;
+	#dp: DynamicProcessorInstance;
+	#monitor: Monitor;
 
 	#state = new Map();
 
@@ -18,7 +21,7 @@ export default class {
 	 * @param dp {object} The dynamic processor
 	 * @param monitor {object} The dynamic processor monitor
 	 */
-	constructor(dp, monitor) {
+	constructor(dp: DynamicProcessorInstance, monitor: Monitor) {
 		this.#dp = dp;
 		this.#monitor = monitor;
 	}

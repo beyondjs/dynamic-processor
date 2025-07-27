@@ -1,5 +1,6 @@
 import type { DynamicProcessorInstance } from '..';
 import type { ChildrenType } from '.';
+import validateChild from './validate-child';
 
 export default class extends Map {
 	#dp: DynamicProcessorInstance;
@@ -27,7 +28,7 @@ export default class extends Map {
 		children.forEach((specs, name) => {
 			if (!specs) throw new Error(`Invalid specification of child "${name}". Specification is undefined`);
 			const { child } = specs;
-			require('./validate-child')(child, name);
+			validateChild(child, name);
 
 			if (this.has(name) && specs.child !== this.get(name).child) {
 				throw new Error(`Child "${name}" already registered with a different dp`);

@@ -37,12 +37,12 @@ export class Children extends Registered {
 	 * The pendings are registered when the check(dp) function is called in the _prepared method
 	 * If the processor that is being requested is not processed, then it is registered as a pending dp
 	 *
-	 * @param child {DynamicProcessorInstance} The pending dp
+	 * @param required {DynamicProcessorInstance} The pending dp
 	 * @param data {{id: string}} Information provided when the check function is called
 	 */
-	require(child: DynamicProcessorInstance, data: { id: string }) {
-		if (this.dp === child) throw new Error('Requiring itself as a child processor');
-		this.#required.register(child, data);
+	require(required: DynamicProcessorInstance, data: { id: string }) {
+		if (this.dp === required) throw new Error('Requiring itself as a required processor');
+		this.#required.register(required, data);
 	}
 
 	reset(): void {

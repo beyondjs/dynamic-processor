@@ -1,18 +1,19 @@
-import 'colors';
+import type { Children } from '..';
+import * as colors from 'colors';
 
 export default class {
-	#children;
-	#timer;
-	#delay;
+	#children: Children;
+	#timer: NodeJS.Timeout | undefined;
+	#delay: number;
 	#logs;
 
 	/**
 	 * The reason why the _prepared method is blocking the processing of the dp
 	 * @type Undefined | string
 	 */
-	#onhold;
+	#onhold: string | undefined;
 
-	constructor(children, delay) {
+	constructor(children: Children, delay?: number) {
 		this.#children = children;
 		this.#delay = delay ? delay : 5000;
 		this.#logs = require('../../logs');
@@ -45,7 +46,7 @@ export default class {
 		logs.append('');
 	};
 
-	hang(reason) {
+	hang(reason?: string) {
 		this.#onhold = reason ? reason : 'not specified';
 		this.#timer && clearTimeout(this.#timer);
 		this.#timer = setTimeout(this.#checkpoint, this.#delay);

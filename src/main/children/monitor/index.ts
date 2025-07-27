@@ -1,10 +1,17 @@
-export default class extends Map {
-	#dp;
-	#children;
-	#ready;
-	#controller;
+import type { DynamicProcessorInstance } from '../..';
+import type { Children } from '..';
+import Controller from './controller';
+import Checkpoint from './checkpoint';
+import Child from './child';
+import log from './logs';
 
-	#checkpoint;
+export default class extends Map<DynamicProcessorInstance, Child> {
+	#dp: DynamicProcessorInstance;
+	#children: Children;
+	#ready: () => void;
+	#controller: Controller;
+
+	#checkpoint: Checkpoint;
 	get checkpoint() {
 		return this.#checkpoint;
 	}
@@ -16,20 +23,20 @@ export default class extends Map {
 	 * @param children {object} The dynamic processor children
 	 * @param ready {function} The function to call when the children get ready
 	 */
-	constructor(dp, children, ready) {
+	constructor(dp: DynamicProcessorInstance, children: Children, ready: () => void) {
 		super();
 		this.#dp = dp;
 		this.#children = children;
 		this.#ready = ready;
-		this.#controller = new (require('./controller'))(dp, this);
-		this.#checkpoint = new (require('./checkpoint'))(this.#children);
+		this.#controller = new Controller(dp, this);
+		this.#checkpoint = new Checkpoint(this.#children);
 	}
 
-	get items() {
+	get items(): Set<DynamicProcessorInstance> {
 		const registered = this.#children;
 		const { required } = this.#children;
 
-		const children = new Set();
+		const children: Set<DynamicProcessorInstance> = new Set();
 		registered.forEach(({ child }) => children.add(child));
 		[...required.keys()].forEach(child => children.add(child));
 
@@ -50,9 +57,9 @@ export default class extends Map {
 	 * Called when the children have changed or when a child has changed
 	 * @param child= {object} When the reevaluation is required by a change in a child, useful when debugging
 	 */
-	#reevaluate = child => {
+	#reevaluate = (child?: DynamicProcessorInstance) => {
 		this.#checkpoint.release();
-		this.prepared && require('./logs')(this.#children.dp, child);
+		this.prepared && log(this.#children.dp, child);
 		!this.prepared && this.#checkpoint.set();
 
 		// controller.updated means that the children state is the same as it was when the last processing was done,
@@ -72,7 +79,7 @@ export default class extends Map {
 		const registered = this.#children;
 		const { required } = this.#children;
 
-		const children = new Set();
+		const children: Set<DynamicProcessorInstance> = new Set();
 		registered.forEach(({ child }) => children.add(child));
 		[...required.keys()].forEach(child => children.add(child));
 
@@ -83,7 +90,7 @@ export default class extends Map {
 			if (this.has(child)) return;
 
 			// mchild is a monitored child that reacts to the 'change' event
-			const mchild = new (require('./child'))(child, this.#reevaluate);
+			const mchild = new Child(child, this.#reevaluate);
 			this.set(child, mchild);
 			changed = true;
 		});
@@ -111,7 +118,7 @@ export default class extends Map {
 	 * it calls this method to report the reason.
 	 * This occurs, for example, in cases where the processor detects that one of its children is not synchronized.
 	 */
-	hang(reason) {
+	hang(reason: string) {
 		this.#controller.invalidate();
 		this.#checkpoint.hang(reason);
 	}

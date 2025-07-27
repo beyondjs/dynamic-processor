@@ -5,6 +5,32 @@
 	"version": "1.0.0",
 	"license": "MIT",
 	"repository": "https://github.com/beyondjs/dynamic-processor",
+	"modules": {
+		"path": "main"
+	},
+	"deployment": {
+		"distributions": [
+			{
+				"name": "web",
+				"platform": "web",
+				"environment": "local",
+				"ports": {
+					"bundles": 1120
+				}
+			},
+			{
+				"name": "node",
+				"platform": "node",
+				"environment": "local",
+				"ports": {
+					"bundles": 1340
+				},
+				"ts": {
+					"compiler": "tsc"
+				}
+			}
+		]
+	},
 	"dependencies": {
 		"@beyond-js/pending-promise": "~0.0.4",
 		"colors": "1.4.0"
