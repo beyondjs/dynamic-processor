@@ -4,7 +4,7 @@ import Required from './required';
 import Monitor from './monitor';
 
 // A map of children where each child is an instance of a DynamicProcessor
-export type ChildrenType = Map<string, { child: DynamicProcessorInstance }>;
+export /*bundle*/ type ChildrenType = Map<string, { child: DynamicProcessorInstance }>;
 
 export class Children extends Registered {
 	readonly #required: Required;

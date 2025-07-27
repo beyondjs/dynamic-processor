@@ -23,7 +23,7 @@ const registry: Set<DynamicProcessorInstance> = new Set();
 
 type RequireType = (dp: DynamicProcessorInstance, id: string) => boolean;
 
-interface IRequest {
+export interface IRequest {
 	is: 'dynamic-processor';
 	value: number;
 }
