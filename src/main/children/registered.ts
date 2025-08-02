@@ -42,7 +42,7 @@ export default class extends Map {
 		changed && invalidate && this.#dp._invalidate();
 	}
 
-	unregister(children: ChildrenType, invalidate = true) {
+	unregister(children: string[], invalidate = true) {
 		if (!(children instanceof Array)) throw new Error('Invalid parameters');
 
 		let changed = false;

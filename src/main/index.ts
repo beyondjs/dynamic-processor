@@ -14,6 +14,8 @@ type DynamicProcessorType = ReturnType<typeof DynamicProcessor>;
 // Get the instance type of the dynamically created class
 export type DynamicProcessorInstance = InstanceType<DynamicProcessorType>;
 
+export /*bundle*/ type IProcessResponse = boolean | { notify?: boolean; changed?: boolean };
+
 type Listener = (...args: any[]) => any;
 
 let autoincremental = { id: 0, request: 0 };
@@ -208,8 +210,9 @@ export /*bundle*/ const DynamicProcessor = <TBase extends Constructor>(Base: TBa
 		}
 
 		// This method should be overridden
-		async _process(request: IRequest): Promise<void | boolean | { notify?: boolean; changed?: boolean }> {
+		_process(request: IRequest): IProcessResponse | Promise<IProcessResponse> {
 			void request;
+			return;
 		}
 
 		#tu: number;
