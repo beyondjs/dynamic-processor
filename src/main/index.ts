@@ -21,7 +21,7 @@ let autoincremental = { id: 0, request: 0 };
 // A registry of all Dynamic Processors created across the instance of the engine
 const registry: Set<DynamicProcessorInstance> = new Set();
 
-type RequireType = (dp: DynamicProcessorInstance, id: string) => boolean;
+export /*bundle*/ type RequireType = (dp: DynamicProcessorInstance, id: string) => boolean;
 
 export interface IRequest {
 	is: 'dynamic-processor';
@@ -161,7 +161,7 @@ export /*bundle*/ const DynamicProcessor = <TBase extends Constructor>(Base: TBa
 			return this.#preparing;
 		}
 
-		_prepared(require: RequireType): boolean | string | undefined {
+		_prepared(require: RequireType): boolean | string | undefined | void {
 			void require;
 			return;
 		}
