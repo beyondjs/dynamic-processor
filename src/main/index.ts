@@ -14,7 +14,7 @@ type DynamicProcessorType = ReturnType<typeof DynamicProcessor>;
 // Get the instance type of the dynamically created class
 export type DynamicProcessorInstance = InstanceType<DynamicProcessorType>;
 
-export /*bundle*/ type IProcessResponse = boolean | { notify?: boolean; changed?: boolean };
+export /*bundle*/ type IProcessResponse = void | boolean | { notify?: boolean; changed?: boolean };
 
 type Listener = (...args: any[]) => any;
 
@@ -265,12 +265,12 @@ export /*bundle*/ const DynamicProcessor = <TBase extends Constructor>(Base: TBa
 			/**
 			 * Once process is completed
 			 *
-			 * @param pr? {boolean | {changed: boolean, notify: boolean}} The process response
+			 * @param pr? The process response
 			 */
-			const done = (pr?: boolean | { notify?: boolean; changed?: boolean }): void => {
+			const done = (pr?: IProcessResponse): void => {
 				if (this.#request !== request) return;
 
-				pr = typeof pr === 'object' ? pr : { notify: pr, changed: pr };
+				pr = typeof pr === 'object' ? pr : { notify: <boolean>pr, changed: !!pr };
 				pr.notify = pr.notify === void 0 ? true : !!pr.notify;
 				pr.changed = pr.changed === void 0 ? true : !!pr.changed;
 
