@@ -19,11 +19,18 @@ jobs:
                   node-version: '18'
                   registry-url: 'https://registry.npmjs.org'
 
-            - name: Change to src directory
-              run: cd src
+            - name: Install BeyondJS globally
+              run: npm install -g beyond@latest
+
+            - name: Install dependencies
+              working-directory: src
+              run: npm install
+
+            - name: Build package
+              run: beyond build --pkg=@beyond-js/dynamic-processor --distribution=npm --logs
 
             - name: Publish to NPM
+              working-directory: src/.beyond/builds/npm/code
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
               run: npm publish --access public
-              working-directory: ./src

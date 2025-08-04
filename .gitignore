@@ -1,4 +1,5 @@
 node_modules
+!src/modules/node_modules
 .idea
 .beyond
 .vscode
