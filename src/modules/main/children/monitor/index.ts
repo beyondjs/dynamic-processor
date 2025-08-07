@@ -6,7 +6,6 @@ import Child from './child';
 import log from './logs';
 
 export default class extends Map<DynamicProcessorInstance, Child> {
-	#dp: DynamicProcessorInstance;
 	#children: Children;
 	#ready: () => void;
 	#controller: Controller;
@@ -25,7 +24,7 @@ export default class extends Map<DynamicProcessorInstance, Child> {
 	 */
 	constructor(dp: DynamicProcessorInstance, children: Children, ready: () => void) {
 		super();
-		this.#dp = dp;
+
 		this.#children = children;
 		this.#ready = ready;
 		this.#controller = new Controller(dp, this);
@@ -43,7 +42,7 @@ export default class extends Map<DynamicProcessorInstance, Child> {
 		return children;
 	}
 
-	get pending() {
+	get pending(): DynamicProcessorInstance[] {
 		return [...this.items].filter(child => !child.processed);
 	}
 

@@ -8,16 +8,16 @@ export /*bundle*/ type ChildrenType = Map<string, { child: DynamicProcessorInsta
 
 export class Children extends Registered {
 	readonly #required: Required;
-	get required() {
+	get required(): Required {
 		return this.#required;
 	}
 
 	readonly #monitor: Monitor;
-	get monitor() {
+	get monitor(): Monitor {
 		return this.#monitor;
 	}
 
-	get pending() {
+	get pending(): DynamicProcessorInstance[] {
 		return this.#monitor.pending;
 	}
 

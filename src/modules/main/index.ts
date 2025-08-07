@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import { PendingPromise } from '@beyond-js/pending-promise/main';
 import { Children, ChildrenType } from './children';
+import logs from './logs';
 
 // A generic Constructor type to represent any class constructor
 type Constructor<T = {}> = new (...args: any[]) => T;
@@ -86,7 +87,6 @@ export /*bundle*/ const DynamicProcessor = <TBase extends Constructor>(Base: TBa
 			!this.#initialising && !this.#initialised && this.initialise().catch(exc => console.error(exc.stack));
 			return this.#ready;
 		}
-		#logs;
 
 		_events = new EventEmitter();
 		on = (event: string, listener: Listener) => {
@@ -96,8 +96,8 @@ export /*bundle*/ const DynamicProcessor = <TBase extends Constructor>(Base: TBa
 
 			if (max === count) {
 				const message = `Max. listeners (${max}) achieved on dp "${this.dp}" - with id: "${this.id}"`;
-				this.#logs.append(message);
-				console.log(`${message}.\nCheck the logs: ${this.#logs.store}\n`);
+				logs.append(message);
+				console.log(`${message}.\nCheck the logs: ${logs.store}\n`);
 
 				const consumers = (() => {
 					let consumers = '';
@@ -111,7 +111,7 @@ export /*bundle*/ const DynamicProcessor = <TBase extends Constructor>(Base: TBa
 					});
 					return consumers;
 				})();
-				this.#logs.append(consumers);
+				logs.append(consumers);
 			}
 
 			this._events.on(event, listener);
@@ -126,7 +126,6 @@ export /*bundle*/ const DynamicProcessor = <TBase extends Constructor>(Base: TBa
 
 			this.#children = new Children(this, this.#preprocess);
 			this.setMaxListeners(500);
-			this.#logs = require('./logs');
 		}
 
 		#initialising = false;
@@ -258,7 +257,7 @@ export /*bundle*/ const DynamicProcessor = <TBase extends Constructor>(Base: TBa
 				now: Date.now(),
 				check: () => {
 					const ms = Date.now() - performance.now;
-					ms > 2000 && this.#logs.append(`"${this.dp}" took ${ms} ms. to process`);
+					ms > 2000 && logs.append(`"${this.dp}" took ${ms} ms. to process`);
 				}
 			};
 

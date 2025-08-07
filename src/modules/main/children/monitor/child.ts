@@ -4,7 +4,7 @@ type ReevaluateType = (child?: DynamicProcessorInstance) => void;
 
 export default class {
 	#child: DynamicProcessorInstance;
-	get child() {
+	get child(): DynamicProcessorInstance {
 		return this.#child;
 	}
 

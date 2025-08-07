@@ -6,9 +6,7 @@ import * as colors from 'colors';
 const { createWriteStream } = fs;
 const { access, unlink, mkdir } = fs.promises;
 
-let incremental = 0;
-
-export default new (class {
+export class Logs {
 	#ready = false;
 	#stream!: WriteStream;
 	#error = false;
@@ -26,7 +24,7 @@ export default new (class {
 	};
 
 	async #initialise(): Promise<void> {
-		const name = `dp-${process.pid}-${incremental++}.log`;
+		const name = `dp-${process.pid}-${Date.now()}.log`;
 		const dirname = join(process.cwd(), '.beyond/dps');
 		const store = (this.#store = join(dirname, name));
 
@@ -62,4 +60,6 @@ export default new (class {
 
 		!this.#error && this.#stream.write(`${message}\n`, this.#onerror);
 	}
-})();
+}
+
+export default new Logs();

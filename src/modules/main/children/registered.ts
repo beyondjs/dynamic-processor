@@ -4,7 +4,7 @@ import validateChild from './validate-child';
 
 export default class extends Map {
 	#dp: DynamicProcessorInstance;
-	get dp() {
+	get dp(): DynamicProcessorInstance {
 		return this.#dp;
 	}
 
