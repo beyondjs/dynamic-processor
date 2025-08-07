@@ -2,7 +2,7 @@
 	"name": "@beyond-js/dynamic-processor",
 	"author": "BeyondJS",
 	"email": "hello@beyondjs.com",
-	"version": "1.0.4",
+	"version": "1.0.5",
 	"license": "MIT",
 	"repository": "https://github.com/beyondjs/dynamic-processor",
 	"modules": {
@@ -11,19 +11,17 @@
 	"deployment": {
 		"distributions": [
 			{
-				"name": "web",
-				"platform": "web",
-				"environment": "local",
+				"name": "node",
+				"platform": "node",
 				"ports": {
-					"bundles": 1120
+					"bundles": 1110
 				}
 			},
 			{
-				"name": "node",
+				"name": "node-ts",
 				"platform": "node",
-				"environment": "local",
 				"ports": {
-					"bundles": 1340
+					"bundles": 1111
 				},
 				"ts": {
 					"compiler": "tsc"
@@ -32,7 +30,7 @@
 		]
 	},
 	"dependencies": {
-		"@beyond-js/pending-promise": "~0.0.4",
+		"@beyond-js/pending-promise": "~0.0.5",
 		"colors": "1.4.0"
 	},
 	"devDependencies": {
