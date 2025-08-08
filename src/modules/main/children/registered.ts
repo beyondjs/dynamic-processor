@@ -1,14 +1,14 @@
-import type { DynamicProcessorInstance } from '..';
+import type { DynamicProcessorImplementation } from '../dp';
 import type { ChildrenType } from '.';
 import validateChild from './validate-child';
 
 export default class extends Map {
-	#dp: DynamicProcessorInstance;
-	get dp(): DynamicProcessorInstance {
+	#dp: DynamicProcessorImplementation;
+	get dp(): DynamicProcessorImplementation {
 		return this.#dp;
 	}
 
-	constructor(dp: DynamicProcessorInstance) {
+	constructor(dp: DynamicProcessorImplementation) {
 		super();
 		this.#dp = dp;
 	}

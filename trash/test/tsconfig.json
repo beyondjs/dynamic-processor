@@ -1,0 +1,8 @@
+{
+	"compilerOptions": {
+		"noImplicitAny": true,
+		"types": ["@types/node"],
+		"target": "esnext",
+		"moduleResolution": "node"
+	}
+}

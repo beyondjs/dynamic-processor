@@ -1,314 +1,85 @@
-import { EventEmitter } from 'events';
-import { PendingPromise } from '@beyond-js/pending-promise/main';
-import { Children, ChildrenType } from './children';
-import logs from './logs';
+import { DynamicProcessorImplementation } from './dp';
 
 // A generic Constructor type to represent any class constructor
-type Constructor<T = {}> = new (...args: any[]) => T;
+type Constructor<T = object> = new (...args: any[]) => T;
 
 // A default base class in case no Base is provided
-const Nothing = class {};
+class EmptyBase {}
 
-// Get the class returned by the factory
-type DynamicProcessorType = ReturnType<typeof DynamicProcessor>;
-
-// Get the instance type of the dynamically created class
-export type DynamicProcessorInstance = InstanceType<DynamicProcessorType>;
-
-export /*bundle*/ type IProcessResponse = void | boolean | { notify?: boolean; changed?: boolean };
-
-type Listener = (...args: any[]) => any;
-
-let autoincremental = { id: 0, request: 0 };
-
-// A registry of all Dynamic Processors created across the instance of the engine
-const registry: Set<DynamicProcessorInstance> = new Set();
-
-export /*bundle*/ type RequireType = (dp: DynamicProcessorInstance, id: string) => boolean;
-
-export interface IRequest {
-	is: 'dynamic-processor';
-	value: number;
-}
+// Instance surface of the dynamic processor implementation.
+// Using the instance type means you do not need to update overloads
+// when you add new public members to DynamicProcessorImplementation.
+type DPInstance = InstanceType<typeof DynamicProcessorImplementation>;
 
 /**
- * DynamicProcessor is a base class for creating dynamic processors.
- * It provides a structure for managing child processors, handling events,
- * and processing data in a dynamic way.
+ * DynamicProcessor is a mixin factory.
  *
- * @param Base {object} - The base class to extend from. Defaults to Nothing if not provided.
+ * Overloads keep constructor params and instance type when a Base is provided,
+ * and expose the dynamic processor surface in both cases.
+ * See overloads.md for why these overloads are required.
  */
-export /*bundle*/ const DynamicProcessor = <TBase extends Constructor>(Base: TBase = Nothing as TBase) =>
-	class DynamicProcessor extends Base {
-		get dp(): string {
-			throw new Error('Getter .dp must return a string');
+export /*bundle*/ const DynamicProcessor: {
+	// With Base: preserve Base ctor and add DP instance surface
+	<TBase extends Constructor>(Base: TBase): new (...args: ConstructorParameters<TBase>) => InstanceType<TBase> &
+		DPInstance;
+
+	// Without Base: just the DP instance surface
+	(): new () => DPInstance;
+} = ((Base?: Constructor) => {
+	const ActualBase = Base ?? EmptyBase;
+
+	// Use a Symbol to store the implementation instance.
+	// This lets us forward from prototype wrappers without using private fields.
+	const slot = Symbol('dp');
+
+	class DynamicProcessorMixin extends (ActualBase as Constructor) {
+		[slot]: DPInstance;
+
+		constructor(...args: any[]) {
+			super(...args);
+			this[slot] = new DynamicProcessorImplementation();
 		}
+	}
 
-		#autoincremented = autoincremental.id++;
-		get autoincremented() {
-			return this.#autoincremented;
-		}
+	// Forward all public members from DynamicProcessorImplementation.prototype
+	// to DynamicProcessorMixin.prototype by defining wrappers.
+	//
+	// Notes
+	// 1. We skip "constructor".
+	// 2. Accessors are forwarded by calling their getter or setter with "this[slot]".
+	// 3. Methods are forwarded by applying on "this[slot]".
+	// 4. Private fields (with "#") are not on the prototype, so nothing to do.
+	const proto = DynamicProcessorImplementation.prototype;
+	for (const name of Object.getOwnPropertyNames(proto)) {
+		if (name === 'constructor') continue;
 
-		// This method can be overridden
-		// It should return a string that identifies the dynamic processor
-		// If not overridden, it will return the autoincremented id
-		// This is useful for debugging purposes and to identify the dynamic processor in the registry
-		get id(): string {
-			return this.autoincremented.toString();
-		}
+		const desc = Object.getOwnPropertyDescriptor(proto, name)!;
 
-		// ms to wait to process after invalidation
-		waitToProcess = 0;
-		// Execute _notify method on first processing
-		notifyOnFirst = false;
+		// Do not override if already defined on the mixin prototype
+		if (Object.prototype.hasOwnProperty.call(DynamicProcessorMixin.prototype, name)) continue;
 
-		#children: Children;
-		get children() {
-			return this.#children;
-		}
+		Object.defineProperty(DynamicProcessorMixin.prototype, name, {
+			configurable: true,
+			enumerable: desc.enumerable,
+			get: desc.get
+				? function (this: any) {
+						return desc.get!.call(this[slot]);
+				  }
+				: undefined,
+			set: desc.set
+				? function (this: any, v: any) {
+						return desc.set!.call(this[slot], v);
+				  }
+				: undefined,
+			value:
+				typeof desc.value === 'function'
+					? function (this: any, ...args: any[]) {
+							return desc.value!.apply(this[slot], args);
+					  }
+					: desc.value
+		});
+	}
 
-		/**
-		 * Dynamic processor setup
-		 *
-		 * @param children {ChildrenType} The children to register
-		 */
-		setup(children: ChildrenType) {
-			this.#children.register(children, false);
-		}
-
-		// Is a property that is defined only when processing and before initialised
-		#ready: PendingPromise<void> = new PendingPromise();
-		get ready() {
-			if (this.#processed || this.#destroyed) return Promise.resolve();
-
-			this.#ready = this.#ready || new PendingPromise();
-
-			// Initialization triggers processing, and promise resolution
-			!this.#initialising && !this.#initialised && this.initialise().catch(exc => console.error(exc.stack));
-			return this.#ready;
-		}
-
-		_events = new EventEmitter();
-		on = (event: string, listener: Listener) => {
-			// To find if a dynamic processor hasn't set the maxListeners correctly
-			const count = this._events.listenerCount(event);
-			const max = this._events.getMaxListeners();
-
-			if (max === count) {
-				const message = `Max. listeners (${max}) achieved on dp "${this.dp}" - with id: "${this.id}"`;
-				logs.append(message);
-				console.log(`${message}.\nCheck the logs: ${logs.store}\n`);
-
-				const consumers = (() => {
-					let consumers = '';
-					let count = 0;
-					registry.forEach(consumer => {
-						const { items: requiring } = consumer.children.monitor;
-						if (!requiring.has(this)) return;
-
-						const { dp, id } = consumer;
-						consumers += `\t* [${++count}] - dp "${dp}" - with id: "${id}"\n`;
-					});
-					return consumers;
-				})();
-				logs.append(consumers);
-			}
-
-			this._events.on(event, listener);
-		};
-		off = (event: string, listener: Listener) => this._events.off(event, listener);
-		removeALlListeners = () => this._events.removeAllListeners();
-		setMaxListeners = (n: number) => this._events.setMaxListeners(n);
-
-		constructor(...params: any[]) {
-			super(...params);
-			registry.add(this);
-
-			this.#children = new Children(this, this.#preprocess);
-			this.setMaxListeners(500);
-		}
-
-		#initialising = false;
-		get initialising() {
-			return this.#initialising;
-		}
-
-		#initialised = false;
-		get initialised() {
-			return this.#initialised;
-		}
-
-		// This method can be overridden
-		async _begin() {}
-
-		async initialise() {
-			if (typeof this.dp !== 'string' || !this.dp) throw new Error('Getter .dp must return a string');
-
-			if (this.#destroyed || this.#initialising || this.#initialised) return;
-			this.#initialising = true;
-
-			await this._begin();
-
-			this.#initialising = false;
-			this.#initialised = true;
-
-			// On children initialisation, and after all child objects are ready, the #preprocess method is called
-			this.#children.initialise();
-		}
-
-		// The processor is processing, specifically in the preparation phase
-		#preparing: boolean;
-		get preparing() {
-			return this.#preparing;
-		}
-
-		_prepared(require: RequireType): boolean | string | undefined | void {
-			void require;
-			return;
-		}
-
-		// Is the processor prepared to process?
-		// If not prepared, the promise will be kept pending, and will be processed at the next invalidation.
-		get __prepared(): boolean | string {
-			this.#preparing = true;
-			this.#children.reset();
-
-			// Check if dynamic processor is processed, but also initialise it if it wasn't previously initialised
-			const require: RequireType = (dp, id) => {
-				this.#children.require(dp, { id });
-				return dp.processed;
-			};
-
-			let prepared = this._prepared(require);
-			if (typeof prepared === 'string') {
-				this.#children.monitor.hang(prepared);
-				prepared = false;
-			}
-			prepared = prepared === void 0 ? true : !!prepared;
-
-			this.#preparing = false;
-			return prepared;
-		}
-
-		#first = true; // Is it the first notification?
-		get first() {
-			return this.#first;
-		}
-
-		// This method should be overridden
-		_notify() {}
-
-		#processing = false;
-		get processing() {
-			return this.#processing;
-		}
-
-		#processed = false;
-		get processed() {
-			return this.#processed;
-		}
-
-		// This method should be overridden
-		_process(request: IRequest): IProcessResponse | Promise<IProcessResponse> {
-			void request;
-			return;
-		}
-
-		#tu: number;
-		get tu() {
-			return this.#tu;
-		}
-
-		#request: IRequest;
-		get _request() {
-			return this.#request;
-		}
-
-		cancelled(request: IRequest) {
-			return this.#request !== request;
-		}
-
-		/**
-		 * Called by children when ready or upon a change in any of the children, or upon invalidation
-		 */
-		#preprocess = () => {
-			if (this.#destroyed) return;
-
-			this.#processed = false;
-			this.#processing = true;
-
-			const prepared = this.__prepared;
-			const changed = this.#children.update();
-			if (changed) {
-				/**
-				 * The processor became invalid while preparing, so call preprocess again
-				 * In this case __prepared is called again until all children is properly set
-				 */
-				this.#preprocess();
-				return;
-			}
-
-			// If not prepared, the children is responsible to call #preprocess again when ready
-			if (!prepared || !this.#children.prepared) return;
-
-			const request = (this.#request = { is: 'dynamic-processor', value: autoincremental.request++ });
-
-			const performance = {
-				now: Date.now(),
-				check: () => {
-					const ms = Date.now() - performance.now;
-					ms > 2000 && logs.append(`"${this.dp}" took ${ms} ms. to process`);
-				}
-			};
-
-			/**
-			 * Once process is completed
-			 *
-			 * @param pr? The process response
-			 */
-			const done = (pr?: IProcessResponse): void => {
-				if (this.#request !== request) return;
-
-				pr = typeof pr === 'object' ? pr : { notify: <boolean>pr, changed: !!pr };
-				pr.notify = pr.notify === void 0 ? true : !!pr.notify;
-				pr.changed = pr.changed === void 0 ? true : !!pr.changed;
-
-				this.#tu = Date.now(); // The time updated
-				performance.check();
-				this.#processing = false;
-				this.#processed = !this.#destroyed;
-
-				const ready = this.#ready;
-				this.#ready = void 0;
-				ready?.resolve();
-
-				const { changed, notify } = pr;
-				(changed || this.#destroyed || this.#first) && this._events.emit('change', this);
-				!this.#destroyed && notify && (!this.#first || this.notifyOnFirst) && this._notify();
-				this.#first = false;
-			};
-
-			// The process response
-			const pr = this._process(request);
-			pr instanceof Promise ? pr.then(done).catch(exc => console.error(exc.stack)) : done(pr);
-		};
-
-		_invalidate = () => {
-			this.#initialised && !this.#preparing && this.#preprocess();
-		};
-
-		#destroyed = false;
-		get destroyed() {
-			return this.#destroyed;
-		}
-
-		destroy() {
-			if (this.#destroyed) throw new Error('Object is already destroyed');
-			this.#request = void 0;
-			this.#children.destroy();
-			this.#destroyed = true;
-			registry.delete(this);
-
-			this._events.emit('change', this);
-		}
-	};
+	// Cast is needed because the implementation body cannot express both overloads directly.
+	return DynamicProcessorMixin as any;
+}) as any;

@@ -1,4 +1,4 @@
-import type { DynamicProcessorInstance } from '../..';
+import type { DynamicProcessorImplementation } from '../../dp';
 import type Monitor from '.';
 
 /**
@@ -10,7 +10,7 @@ import type Monitor from '.';
  * depends on the analyzer as well.
  */
 export default class {
-	#dp: DynamicProcessorInstance;
+	#dp: DynamicProcessorImplementation;
 	#monitor: Monitor;
 
 	#state = new Map();
@@ -21,7 +21,7 @@ export default class {
 	 * @param dp {object} The dynamic processor
 	 * @param monitor {object} The dynamic processor monitor
 	 */
-	constructor(dp: DynamicProcessorInstance, monitor: Monitor) {
+	constructor(dp: DynamicProcessorImplementation, monitor: Monitor) {
 		this.#dp = dp;
 		this.#monitor = monitor;
 	}

@@ -1,11 +1,11 @@
-import type { DynamicProcessorInstance } from '../..';
+import type { DynamicProcessorImplementation } from '../../dp';
 import type { Children } from '..';
 import Controller from './controller';
 import Checkpoint from './checkpoint';
 import Child from './child';
 import log from './logs';
 
-export default class extends Map<DynamicProcessorInstance, Child> {
+export default class extends Map<DynamicProcessorImplementation, Child> {
 	#children: Children;
 	#ready: () => void;
 	#controller: Controller;
@@ -22,7 +22,7 @@ export default class extends Map<DynamicProcessorInstance, Child> {
 	 * @param children {object} The dynamic processor children
 	 * @param ready {function} The function to call when the children get ready
 	 */
-	constructor(dp: DynamicProcessorInstance, children: Children, ready: () => void) {
+	constructor(dp: DynamicProcessorImplementation, children: Children, ready: () => void) {
 		super();
 
 		this.#children = children;
@@ -31,18 +31,18 @@ export default class extends Map<DynamicProcessorInstance, Child> {
 		this.#checkpoint = new Checkpoint(this.#children);
 	}
 
-	get items(): Set<DynamicProcessorInstance> {
+	get items(): Set<DynamicProcessorImplementation> {
 		const registered = this.#children;
 		const { required } = this.#children;
 
-		const children: Set<DynamicProcessorInstance> = new Set();
+		const children: Set<DynamicProcessorImplementation> = new Set();
 		registered.forEach(({ child }) => children.add(child));
 		[...required.keys()].forEach(child => children.add(child));
 
 		return children;
 	}
 
-	get pending(): DynamicProcessorInstance[] {
+	get pending(): DynamicProcessorImplementation[] {
 		return [...this.items].filter(child => !child.processed);
 	}
 
@@ -56,7 +56,7 @@ export default class extends Map<DynamicProcessorInstance, Child> {
 	 * Called when the children have changed or when a child has changed
 	 * @param child= {object} When the reevaluation is required by a change in a child, useful when debugging
 	 */
-	#reevaluate = (child?: DynamicProcessorInstance) => {
+	#reevaluate = (child?: DynamicProcessorImplementation) => {
 		this.#checkpoint.release();
 		this.prepared && log(this.#children.dp, child);
 		!this.prepared && this.#checkpoint.set();
@@ -78,7 +78,7 @@ export default class extends Map<DynamicProcessorInstance, Child> {
 		const registered = this.#children;
 		const { required } = this.#children;
 
-		const children: Set<DynamicProcessorInstance> = new Set();
+		const children: Set<DynamicProcessorImplementation> = new Set();
 		registered.forEach(({ child }) => children.add(child));
 		[...required.keys()].forEach(child => children.add(child));
 

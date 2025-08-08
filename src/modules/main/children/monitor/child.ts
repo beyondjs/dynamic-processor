@@ -1,17 +1,17 @@
-import type { DynamicProcessorInstance } from '../..';
+import type { DynamicProcessorImplementation } from '../../dp';
 
-type ReevaluateType = (child?: DynamicProcessorInstance) => void;
+type ReevaluateType = (child?: DynamicProcessorImplementation) => void;
 
 export default class {
-	#child: DynamicProcessorInstance;
-	get child(): DynamicProcessorInstance {
+	#child: DynamicProcessorImplementation;
+	get child(): DynamicProcessorImplementation {
 		return this.#child;
 	}
 
 	#reevaluate: ReevaluateType;
 	#onchange = () => this.#reevaluate(this.#child);
 
-	constructor(child: DynamicProcessorInstance, reevaluate: ReevaluateType) {
+	constructor(child: DynamicProcessorImplementation, reevaluate: ReevaluateType) {
 		this.#child = child;
 		this.#reevaluate = reevaluate;
 
