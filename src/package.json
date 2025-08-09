@@ -4,7 +4,10 @@
 	"email": "hello@beyondjs.com",
 	"version": "1.0.7",
 	"license": "MIT",
-	"repository": "https://github.com/beyondjs/dynamic-processor",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/beyondjs/dynamic-processor"
+	},
 	"modules": {
 		"path": "modules"
 	},
