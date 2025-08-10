@@ -15,7 +15,7 @@ export /*bundle*/ type Listener = (...args: any[]) => any;
 // A registry of all Dynamic Processors created across the instance of the engine
 const registry: Set<DynamicProcessorImplementation> = new Set();
 
-export /*bundle*/ type RequireType = (dp: DynamicProcessorImplementation, id: string) => boolean;
+export /*bundle*/ type RequireType = (dp: DynamicProcessorImplementation, id?: string) => boolean;
 
 let autoincremental = { id: 0, request: 0 };
 
