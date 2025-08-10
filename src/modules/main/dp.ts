@@ -69,7 +69,7 @@ export /*bundle*/ class DynamicProcessorImplementation {
 	}
 
 	_events = new EventEmitter();
-	on = (event: string, listener: Listener) => {
+	on(event: string, listener: Listener) {
 		// To find if a dynamic processor hasn't set the maxListeners correctly
 		const count = this._events.listenerCount(event);
 		const max = this._events.getMaxListeners();
@@ -94,10 +94,12 @@ export /*bundle*/ class DynamicProcessorImplementation {
 			logs.append(consumers);
 		}
 
-		this._events.on(event, listener);
-	};
-	off = (event: string, listener: Listener) => this._events.off(event, listener);
-	removeALlListeners = () => this._events.removeAllListeners();
+		return this._events.on(event, listener);
+	}
+	off(event: string, listener: Listener) {
+		return this._events.off(event, listener);
+	}
+	removeAllListeners = () => this._events.removeAllListeners();
 	setMaxListeners = (n: number) => this._events.setMaxListeners(n);
 
 	constructor() {
@@ -248,7 +250,7 @@ export /*bundle*/ class DynamicProcessorImplementation {
 		const done = (pr?: IProcessResponse): void => {
 			if (this.#request !== request) return;
 
-			pr = typeof pr === 'object' ? pr : { notify: <boolean>pr, changed: !!pr };
+			pr = typeof pr === 'object' ? pr : { notify: <boolean>pr, changed: <boolean>pr };
 			pr.notify = pr.notify === void 0 ? true : !!pr.notify;
 			pr.changed = pr.changed === void 0 ? true : !!pr.changed;
 
@@ -272,9 +274,9 @@ export /*bundle*/ class DynamicProcessorImplementation {
 		pr instanceof Promise ? pr.then(done).catch(exc => console.error(exc.stack)) : done(pr);
 	};
 
-	_invalidate = () => {
+	_invalidate() {
 		this.#initialised && !this.#preparing && this.#preprocess();
-	};
+	}
 
 	#destroyed = false;
 	get destroyed() {

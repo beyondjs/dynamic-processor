@@ -35,9 +35,39 @@ export /*bundle*/ const DynamicProcessor: {
 	class DynamicProcessorMixin extends (ActualBase as Constructor) {
 		[slot]: DPInstance;
 
+		_invalidate!: () => void;
+
 		constructor(...args: any[]) {
 			super(...args);
 			this[slot] = new DynamicProcessorImplementation();
+
+			// _invalidate is assigned here (instead of being a prototype method) so it can be used
+			// as a standalone function without losing its context, e.g.:
+			// const fn = dp._invalidate; fn();
+			this._invalidate = () => this[slot]._invalidate();
+
+			/**
+			 * Hooks: Redirect selected members on the internal DP instance to the outer object,
+			 * so when DynamicProcessorImplementation calls them (e.g., this.dp or this._process),
+			 * it actually executes the overrides defined in the outer subclass.
+			 */
+
+			// Hook getters so internal calls like `this.dp` and `this.id` reach outer overrides.
+			Object.defineProperty(this[slot], 'dp', {
+				configurable: true,
+				get: () => (this as any).dp
+			});
+
+			Object.defineProperty(this[slot], 'id', {
+				configurable: true,
+				get: () => (this as any).id
+			});
+
+			// Hook polymorphic methods so internal calls delegate to the outer instance.
+			(this[slot] as any)._begin = (...a: any[]) => (this as any)._begin?.(...a);
+			(this[slot] as any)._prepared = (require: any) => (this as any)._prepared?.(require);
+			(this[slot] as any)._process = (req: any) => (this as any)._process?.(req);
+			(this[slot] as any)._notify = (...a: any[]) => (this as any)._notify?.(...a);
 		}
 	}
 
@@ -53,31 +83,44 @@ export /*bundle*/ const DynamicProcessor: {
 	for (const name of Object.getOwnPropertyNames(proto)) {
 		if (name === 'constructor') continue;
 
+		// Do not override if already defined on the mixin prototype.
+		if (DynamicProcessorMixin.prototype.hasOwnProperty(name)) continue;
+
+		// Get the property descriptor from the implementation prototype.
 		const desc = Object.getOwnPropertyDescriptor(proto, name)!;
 
-		// Do not override if already defined on the mixin prototype
-		if (Object.prototype.hasOwnProperty.call(DynamicProcessorMixin.prototype, name)) continue;
-
-		Object.defineProperty(DynamicProcessorMixin.prototype, name, {
-			configurable: true,
-			enumerable: desc.enumerable,
-			get: desc.get
-				? function (this: any) {
-						return desc.get!.call(this[slot]);
-				  }
-				: undefined,
-			set: desc.set
-				? function (this: any, v: any) {
-						return desc.set!.call(this[slot], v);
-				  }
-				: undefined,
-			value:
-				typeof desc.value === 'function'
-					? function (this: any, ...args: any[]) {
-							return desc.value!.apply(this[slot], args);
+		// We cannot mix accessor keys (get/set) with data descriptor keys (value/writable) in the same property descriptor.
+		// Doing so will throw: "Invalid property descriptor. Cannot both specify accessors and a value or writable attribute".
+		if (desc.get || desc.set) {
+			// Accessor descriptor: only define get/set
+			Object.defineProperty(DynamicProcessorMixin.prototype, name, {
+				configurable: true,
+				enumerable: desc.enumerable,
+				get: desc.get
+					? function (this: any) {
+							return desc.get!.call(this[slot]);
 					  }
-					: desc.value
-		});
+					: undefined,
+				set: desc.set
+					? function (this: any, v: any) {
+							return desc.set!.call(this[slot], v);
+					  }
+					: undefined
+			});
+		} else {
+			// Data descriptor: only define value/writable
+			Object.defineProperty(DynamicProcessorMixin.prototype, name, {
+				configurable: true,
+				enumerable: desc.enumerable,
+				writable: desc.writable,
+				value:
+					typeof desc.value === 'function'
+						? function (this: any, ...args: any[]) {
+								return desc.value!.apply(this[slot], args);
+						  }
+						: desc.value
+			});
+		}
 	}
 
 	// Cast is needed because the implementation body cannot express both overloads directly.
