@@ -1,57 +1,33 @@
-# @beyond-js/dynamic-processor
+# Dynamic Processor
 
-## Introduction
+Dynamic Processor coordinates asynchronous computation whose completed state is read synchronously. A processor waits for registered or dynamically required child processors, recomputes after invalidation, and exposes readiness plus change notifications. It is a Beyond-authored Node utility used by configuration and compilation objects.
 
-The context on which the DynamicProcessor is designed, is when there is an asynchronous processing, and where you want
-to access the processed data synchronously, once the asynchronous processing has finished.
+Import the public module `@beyond-js/dynamic-processor/main`. The `DynamicProcessor()` factory returns a class with the lifecycle surface; supply a base constructor to compose that lifecycle with an existing class.
 
-The general logic of the processor is that it starts in an inactive state, and once started, it is kept up-to-date by
-processing each time it is invalidated and as long as it has already been started. As the consumption of the
-DynamicProcessor data is synchronous, the data must be consumed after waiting for the .ready promise, or after receiving
-change notifications ('change' event). The 'change' event guarantees that the data has already been previously
-processed.
+```ts
+import { DynamicProcessor } from '@beyond-js/dynamic-processor/main';
 
-## Processor usage is as follows:
-
-1- Access the .ready property
-
--   await processor.ready;
-
-2- Listen for changes
-
--   processor.on ('change', listener);
-
-## Characteristics
-
--   The processor does not execute processing until it is initialized.
--   If the .ready property (await processor.ready) is accessed, the processor is initialized, therefore processing is
-    executed.
--   If the processor is invalidated, and it has already been initialized, then the .process method is executed
-    automatically.
--   It emits change events every time it is processed again, starting from the second processing. The first processing
-    is considered the initial state, and each additional processing, a change of the state of the processor.
-
-## Considerations
-
--   The initialise() method internally calls the \_process() method. The processor is considered initialized when it has
-    already been processed for the first time.
-
-## Problems that DynamicProcessor solves
-
--   Invalidating the object (execute .\_invalidate()) implies reprocessing it, but only if it has already been
-    initialized.
--   The \_process (request) method receives the request parameter that allows, after executing any asynchronous
-    function, to verify if it should continue processing or cancel the execution.
-
-```
-_process(request) {
-  await asyncMethod ();
-  if (this._request! == request) return; // Cancel execution
+class Counter extends DynamicProcessor() {
+    get dp() { return 'counter'; }
+    #value = 0;
+    get value() { return this.#value; }
+    _process() { this.#value++; }
 }
+
+const counter = new Counter();
+await counter.ready;
+console.log(counter.value);
+const changed = () => {
+    if (!counter.destroyed && counter.processed) console.log(counter.value);
+};
+counter.on('change', changed);
+counter._invalidate();
+counter.off('change', changed);
+counter.destroy();
 ```
 
--   If the object is invalidated while processing, DynamicProcessor rerun the \_process method automatically.
+`ready` starts initialization, whereas subscribing alone does not. `initialise()` finishing is not the same as processing finishing. The first processing and destruction both emit `change`; inspect lifecycle flags in consumers. Processing failures can leave readiness pending, so the current implementation is not a complete error/retry scheduler.
 
-## License
+Read [architecture and lifecycle](docs/architecture.md), [child compatibility interface](interface.md), and [mixin forwarding and types](src/modules/main/overloads.md). The architecture guide documents field-forwarding, cancellation, logging and teardown limitations that matter before extending the utility.
 
-MIT © [[BeyondJS](https://beyondjs.com)]
+Source lives under [src/package.json](src/package.json), selected by [beyond.json](beyond.json). The root package contains development tooling, not the public utility definition. Build and example-runner requirements are described in the architecture guide; no standalone npm test script is configured.

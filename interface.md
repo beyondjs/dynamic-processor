@@ -1,21 +1,9 @@
-#Dynamic Processor Model Interface implemented by objects to be compatible with the **dynamic processor model**.
+# Dynamic processor child contract
 
--   Data must be accessed synchronously every time the object has been processed.
--   Emit the 'change' event at every change of the processed data.
--   When the 'change' event is emitted, the data must already be processed.
--   Expose the .processing / .processed properties.
--   When processing, processed must be always false.
--   Expose the async .initialise() method.
--   Expose the .ready property, that returns a promise that resolves when the data is processed and ready to be
-    consumed.
--   If the object is not initialized when the .ready property is accessed, then the object is initialized automatically.
--   Once initialised (processed for the first time) the event 'initialised' is emitted.
+A compatible child exposes `dp`, `on/off`, `initialise`, `ready`, `processed`, `destroyed` and `_request`. The registration validator only checks part of that surface; the monitor uses the remaining members. Readiness starts computation when needed. A fresh request object distinguishes recomputation for parent deduplication.
 
-## Minimum interface required:
+Subscribe to `change` for completed output or destruction, then check processed/destroyed before reading usable data. The first completion emits change. There is no initialised event. `initialised` describes completed setup, not necessarily completed processing.
 
--   on / off (EventListener)
--   get ready(): Promise
--   initialise = () => void (0);
--   get processed() {return true;}
--   trigger 'change' event on every change
--   trigger 'initialised' event when initialised
+A child owns its resources. Removing it from a parent detaches the parent's subscription but does not destroy it. Mixin processors are structurally compatible; they are not instanceof DynamicProcessorImplementation.
+
+See [architecture](docs/architecture.md) for exact preparation, event, error and lifetime behavior.
