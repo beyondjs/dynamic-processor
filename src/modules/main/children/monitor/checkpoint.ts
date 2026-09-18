@@ -1,5 +1,6 @@
 import type { Children } from '..';
 import * as colors from 'colors';
+import logs from '../../logs';
 
 export default class {
 	#children: Children;
@@ -16,7 +17,10 @@ export default class {
 	constructor(children: Children, delay?: number) {
 		this.#children = children;
 		this.#delay = delay ? delay : 5000;
-		this.#logs = require('../../logs');
+
+		// The logger is the default export of its module. Requiring the module and calling `append` on its
+		// namespace threw from the timer of this checkpoint, ending the process whenever a processor was slow.
+		this.#logs = logs;
 	}
 
 	#checkpoint = () => {
