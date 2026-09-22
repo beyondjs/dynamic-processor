@@ -16,7 +16,7 @@ export default function (child: DynamicProcessorImplementation, name?: string) {
 	if (!child) {
 		throw new Error(`${error} Child property ${nameText}is undefined`);
 	}
-	if (typeof child.on !== 'function' || typeof child.initialise !== 'function') {
+	if (typeof child.on !== 'function' || typeof child.off !== 'function' || typeof child.initialise !== 'function') {
 		throw new Error(`${error} Child property ${nameText}is not a dynamic processor`);
 	}
 	if (!child.dp) {

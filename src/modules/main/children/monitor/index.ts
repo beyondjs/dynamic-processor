@@ -127,7 +127,13 @@ export default class extends Map<DynamicProcessorImplementation, Child> {
 		this.#reevaluate();
 	}
 
+	/**
+	 * Releases the subscriptions to every child and the checkpoint. The children themselves are not
+	 * destroyed: whoever created them owns them.
+	 */
 	destroy() {
+		this.#checkpoint.release();
 		this.forEach(mchild => mchild.destroy());
+		this.clear();
 	}
 }

@@ -2,81 +2,95 @@
 
 ## Purpose and public surface
 
-A processor owns derived state and collaborators that determine when it can recompute. The public Beyond module is declared by [main/module.json](../src/modules/main/module.json). Its named marked exports include `DynamicProcessor`, `DynamicProcessorImplementation`, `IRequest`, `IProcessResponse`, `Listener`, `RequireType` and `ChildrenType`. Internal children, monitor and logging files are not independent public modules. The required-child implementation also carries a marked default export; consumers should use the named lifecycle API rather than rely on that incidental default without checking generated output.
+A processor owns derived state and the collaborators that decide when it can recompute. The public Beyond module is declared by [main/module.json](../src/modules/main/module.json); its marked exports are `DynamicProcessor`, `DynamicProcessorImplementation`, `IRequest`, `IProcessResponse`, `Listener`, `RequireType` and `ChildrenType`. The internal files behind it are not public modules.
 
-[DynamicProcessor](../src/modules/main/index.ts) is a mixin factory; [DynamicProcessorImplementation](../src/modules/main/dp.ts) owns the actual lifecycle. The factory allocates one implementation object in a symbol slot on the outer object, forwards prototype members, and redirects identity and lifecycle hooks to the outer subclass. It preserves a supplied base constructor's arguments. It does not inherit from DynamicProcessorImplementation: an outer mixin object is not its `instanceof` instance.
+[DynamicProcessor](../src/modules/main/index.ts) is a mixin factory; [DynamicProcessorImplementation](../src/modules/main/dp.ts) owns the lifecycle. The factory allocates one implementation per outer object, forwards the prototype members of the implementation to the outer prototype and redirects the identity and the hooks to the outer subclass; [the mixin guide](../src/modules/main/overloads.md) lists exactly which member goes which way. The outer object is not an `instanceof` the implementation.
 
-The Node `events` EventEmitter supplies notifications; PendingPromise supplies externally settled readiness; the logger imports Node filesystem/path and colors. Importing the module constructs a logger and starts creating a file under the process working directory. This is not a side-effect-free browser utility even though its types describe a broadly reusable object model.
+The implementation depends on the Node `events` emitter, on `@beyond-js/pending-promise/main` for readiness and on `colors` for the log. Importing the module has no filesystem effect: the [log](../src/modules/main/logs/index.ts) opens its file under `.beyond/dps/` of the working directory the first time something is appended.
 
-## Lifecycle and state
+## State
 
 | Member | Meaning |
 | --- | --- |
-| `dp`, `id`, `autoincremented` | Nonempty processor-kind string required from subclass; default ID derives from a process-local counter. These are diagnostic identities, not source revisions or persisted cache keys. |
-| `initialising`, `initialised` | `_begin` in progress; `_begin` completed and child monitoring started. Initialised does not mean first output completed. |
-| `ready` | Starts initialization when needed and returns a pending promise until processing completes. A processed or destroyed object returns a newly resolved Promise. |
-| `preparing`, `processing`, `processed` | Preparation active; preprocess has begun; latest accepted processing completed. Processing can remain true while preparation waits or after failure. |
-| `_request`, `cancelled(request)` | Current request object and identity comparison for stale work. Numeric request values are process-local counters. |
-| `tu`, `first` | Last accepted completion timestamp; whether first completion notification has yet occurred. |
-| `children` | Named registered dependencies plus per-preparation required dependencies and their monitor. |
-| `on`, `off` | EventEmitter subscriptions; return the implementation's emitter, not the outer processor. |
-| `_invalidate`, `destroy`, `destroyed` | Request recomputation after initialization; release child subscriptions and invalidate pending work; terminal flag. |
+| `dp`, `id`, `autoincremented`, `identity` | The kind of processor, a string the subclass must define; its identifier, the process-local counter unless overridden; `identity` is both, readable even when `dp` throws. Diagnostic identities, not cache keys. |
+| `self` | The object subscribers registered on: the outer object of a mixin, the implementation otherwise. It is the argument of `change`. |
+| `initialising`, `initialised` | `_begin` is running; `_begin` completed and the children were started. Neither means a result exists. |
+| `ready` | Starts initialisation when needed. Resolves when a processing completed, rejects when an attempt failed, resolves for a destroyed object. |
+| `error`, `failed` | The `ProcessorFailure` of the last attempt, cleared when a new attempt begins. |
+| `preparing`, `processing`, `processed` | Preparation in progress; an attempt is in progress; the latest attempt completed and was adopted. A failed processor is neither processing nor processed. |
+| `_request`, `cancelled(request)` | The request of the current attempt, or `undefined` while none is current; whether a request is no longer the current one. |
+| `tu`, `first` | The time of the last adopted completion; whether the first completion is still to come. |
+| `children` | The registered children, the children required by the current preparation, and their monitor. |
+| `notifyOnFirst` | Whether `_notify` runs on the first completion. `false` by default; owned by the outer object of a mixin. |
+| `destroyed` | Terminal. |
 
-Initialization validates `dp`, sets initialising, awaits `_begin`, then sets initialised and starts the child monitor. Reading ready initiates this asynchronously. Calling `initialise` while already starting/started returns without joining first processing; use ready for output availability.
+## Lifecycle
 
-Preprocess marks output unprocessed and processing true. Preparation clears dynamic requirements, invokes `_prepared(require)`, reconciles the monitor and reruns preparation if the dependency set changed. Processing begins only when preparation permits it and all monitored children are processed or destroyed. Returning undefined from `_prepared` permits processing, false holds, and a string holds with a diagnostic reason. The callback `require(child, id?)` registers that child for the current pass and reports its `processed` flag; the monitor starts newly required children through their ready getter.
+```mermaid
+stateDiagram-v2
+    [*] --> Created
+    Created --> Initialising: ready, initialise()
+    Initialising --> Failed: dp invalid or _begin rejects
+    Initialising --> Waiting: children started
+    Waiting --> Preparing: children ready, change, _invalidate()
+    Preparing --> Waiting: not prepared, or a child unprocessed
+    Preparing --> Processing: prepared and children ready
+    Processing --> Processed: completion adopted
+    Processing --> Failed: _process throws or rejects
+    Processing --> Preparing: _invalidate() supersedes the attempt
+    Processed --> Preparing: _invalidate(), child change
+    Failed --> Initialising: ready (after a failed initialise)
+    Failed --> Preparing: _invalidate() (after a failed processing)
+    Processed --> Destroyed: destroy()
+    Waiting --> Destroyed: destroy()
+    Failed --> Destroyed: destroy()
+```
 
-Each processing attempt receives a fresh request object. `_process(request)` may return synchronously or return a native Promise. A thenable that is not `instanceof Promise` is treated as a synchronous response object, not awaited. Invalidation can start overlapping attempts; it does not abort I/O. Once a newer processing attempt allocates its request, completion of the older request is ignored. Invalidation alone does not allocate that new request: if preparation or a child blocks the new attempt, the previous request remains current. Its pending asynchronous work can still pass `cancelled(request)` and its completion can be accepted despite changed inputs. User code must check `cancelled(request)` after awaits and before mutating shared derived state, but that guard alone does not close this blocked-preparation race; integration needs an invalidation-generation or equivalent freshness contract.
+**Initialisation.** `initialise()` validates `dp`, runs `_begin()`, marks the object initialised and starts the children. Reading `ready` initialises when needed; calling `initialise()` while it is starting or started returns without joining the first processing. A failure of this phase rejects `ready`, leaves `initialising` and `initialised` false, and a later `ready` tries again. A destruction during `_begin` ends there: the children are not started.
+
+**Preparation.** `#preprocess` marks the object unprocessed and processing, clears the current request, resets the required children and calls `_prepared(require)`. `require(child, id?)` registers the child for this attempt and answers its `processed` flag. Returning `undefined` prepares; `false` holds; a string holds with that reason, which the checkpoint reports. When the set of children changed during preparation, preparation runs again with the new set. When the object is not prepared, or a child is not processed or destroyed, nothing schedules a retry: the children call back through `change`. A `_prepared` that throws fails the attempt.
+
+**Processing.** A prepared attempt allocates a fresh request and calls `_process(request)`. A returned thenable is awaited, whether or not it is a native Promise. A synchronous throw or a rejection fails the attempt, unless the request is no longer current, in which case the failure is only reported. A completion whose request is no longer current is dropped without effect: because the request is cleared when a new attempt begins, this includes the attempt that a newer invalidation superseded while the newer one is still blocked on a child. Nothing cancels the running work and nothing undoes side effects an implementation already performed; `cancelled(request)` after every `await` is what an implementation uses before publishing.
 
 ```ts
 async _process(request) {
-    const next = await this.readInput();
+    const next = await this.read();
     if (this.cancelled(request)) return false;
-    this.replaceValue(next);
+    this.replace(next);
     return { changed: true, notify: true };
 }
 ```
 
-This hook fragment assumes the subclass defines readInput/replaceValue. It illustrates the available request guard, which only detects request replacement or destruction. It does not address the blocked-preparation race and is not a built-in queue or rollback mechanism.
+**Completion.** The response decides two flags. `undefined`, `true`, `false` and `null` set both `changed` and `notify` to their truthiness, with `undefined` meaning true; an object sets each one, defaulting to true. The completion records `tu`, clears `processing`, sets `processed`, resolves `ready`, clears `first`, then [announces](../src/modules/main/announcer.ts): `change` is emitted when the result changed or on the first completion, and `_notify()` runs when `notify` is set, except on the first completion unless `notifyOnFirst`. A subscriber or a `_notify` that throws, or a `_notify` whose promise rejects, is reported through the failure report and alters nothing already recorded; the remaining subscribers of the Node emitter after a throwing one are not called, which is the emitter's behaviour. A processing that took more than two seconds is written to the log.
 
-## Completion and event order
+**Failure.** A failed attempt records a `ProcessorFailure` (message `Dynamic processor "<dp>" (id "<id>") failed while <phase>: <reason>`, with the original error as `cause` and the phase as `phase`), rejects the current `ready`, clears `processing` and reports one line on the console and the stack in the log. The readiness promise is created with a no-op rejection handler, so a failure nobody awaits is not an unhandled rejection. No `change` is emitted for a failure: a parent that requires the failed child stays waiting, and its checkpoint names the child and the failure.
 
-A response of undefined defaults both changed/notify to true. A boolean sets both flags. An object can specify either flag independently; missing values default true. Returning null is not a supported object response: the implementation then accesses its properties and throws.
+**Invalidation.** `_invalidate()` starts a new attempt when the object is initialised and not preparing. It is assigned on the outer object of a mixin, so it works detached. Registering or unregistering children invalidates when asked to.
 
-Accepted completion sets the timestamp, marks processing false and processed true unless destroyed, resolves the stored readiness promise, emits `change` when changed or on first completion, invokes `_notify` if notify is enabled and the first-notification policy allows it, then clears first. Promise callbacks run later as microtasks; synchronous change listeners run before their awaiting consumer resumes.
+**Destruction.** `destroy()` clears the request, releases the subscriptions to every child and the checkpoint timer, leaves the registry, resolves a pending `ready`, marks the object destroyed and emits `change` once more. It does not destroy the children, does not remove the object's own subscribers and throws when called twice. Whoever created a child destroys it.
 
-First completion always emits `change`, even for false. `_notify` skips first completion unless the implementation's notifyOnFirst is true. Destruction also emits `change`, so change is not an unconditional guarantee that usable output exists. No `initialised` event is emitted. Event listener and `_notify` exceptions can interrupt completion bookkeeping; async `_notify` returns are not awaited.
+## Children
 
-## Registered, required and monitored children
+[Registered](../src/modules/main/children/registered.ts) maps names to `{ child }`; `setup()` registers without invalidating, `unregister()` invalidates unless told not to. A name registered twice with a different child is refused; a child is validated structurally by [validate-child.ts](../src/modules/main/children/validate-child.ts). [Required](../src/modules/main/children/required.ts) holds the children of the current preparation with the identifiers given to `require`. Requiring the processor itself, through the implementation or the outer object, is refused.
 
-[Registered](../src/modules/main/children/registered.ts) extends Map of names to `{child}`. Register accepts a Map, validates basic shape, ignores an existing identical name/child and throws for the same name with another child. Registration defaults `invalidate` to false; unregister defaults it to true. `setup` is registration without invalidation. Mutating the inherited Map directly bypasses these validations and invalidation.
+[The monitor](../src/modules/main/children/monitor/index.ts) subscribes once to the `change` of every registered or required child, starts a newly monitored child by reading its `ready`, and releases the subscription of a child no longer used. It re-evaluates the parent on every child change: when every child is processed or destroyed and the [controller](../src/modules/main/children/monitor/controller.ts) finds a child request that differs from the previous processing, the parent processes. The controller compares request identities only; it is not a content hash, not a topological sort and not a cycle detector, so a dependency cycle waits until its checkpoint reports it.
 
-[Required](../src/modules/main/children/required.ts) tracks child objects and diagnostic IDs for only the current preparation pass. [Children](../src/modules/main/children/index.ts) prevents requiring its implementation object itself, but that identity check does not reliably reject an outer mixin requiring itself. Validation checks only on/initialise and a truthy dp; later code additionally needs off, ready, processed, destroyed and request state.
+[The checkpoint](../src/modules/main/children/monitor/checkpoint.ts) arms an unreferenced five-second timer whenever the parent waits, and writes to the log the reason it is held and every pending child with its state, including `failed: <message>` for a child whose `error` is set. `checkpoint.report` is the same text on demand and `checkpoint.pending` says whether it is armed; `monitor.destroy()` releases it.
 
-[Monitor](../src/modules/main/children/monitor/index.ts) takes the union of registered and required child objects, subscribes once per identity and removes subscriptions no longer needed. A [child subscription](../src/modules/main/children/monitor/child.ts) accesses ready before binding change. Prepared accepts a destroyed child; pending still lists anything unprocessed. The [controller](../src/modules/main/children/monitor/controller.ts) compares child request object identities with its last snapshot to avoid duplicate recomputation through shared graph paths. It is not a content hash, topological sort or cycle detector. Dependency cycles can wait indefinitely; a changing dependency set during preparation can recurse without a bounded iteration guard.
+## Diagnostics and the log
 
-Destruction detaches monitor listeners, removes the implementation from its global diagnostic registry, clears its request and emits change. It does not destroy children themselves, clear own EventEmitter listeners, settle an already-issued ready promise, clear monitor collections, close the logger or release checkpoint timers. A later ready access resolves because destroyed is true, while an earlier awaiting caller may still be stranded. Parent/child lifetime ownership must therefore be explicit.
+[Logs](../src/modules/main/logs/index.ts) writes `.beyond/dps/dp-<pid>-<time>.log` under the working directory of the process, opened on the first append; messages appended before it is open are written then, an error opening or writing it is reported once on the console, and `close()` ends the file. It holds failures with their stacks, the reports of throwing subscribers and hooks, slow processings, listener overflow with the processors that require the overflowing one, and the checkpoints. Nothing in it is a physical path of a consumer's evidence: the file name is derived from the process.
 
-## Mixin compatibility limits
+The console receives one line per failure and per throwing subscriber or hook, with the identity of the processor and the reason, so a processor nobody awaits is not silent. The failure a consumer receives keeps the original error as `cause`.
 
-Only own prototype members of DynamicProcessorImplementation are forwarded. Its instance fields `removeAllListeners`, `setMaxListeners`, `waitToProcess` and `notifyOnFirst` are not forwarded; `_events` is reached through a prototype accessor precisely so that it is, because a subclass that emits an event of its own read `undefined` there while its subscribers were registered on the implementation's emitter, and every such emit threw. `_invalidate` is explicitly bound on the outer object. The declared intersection type exposes more than the generated mixin actually supplies: a typed setMaxListeners call can be missing at runtime, and setting outer notifyOnFirst does not change the inner implementation field. waitToProcess is unused by the lifecycle even on a direct implementation subclass; it does not debounce processing.
+## Limits
 
-Prototype forwarding can override same-named methods/getters inherited from a supplied Base; base lifecycle methods are not automatically chained. Subclass hooks reach the outer object, but change payload is the inner implementation object. Consumers should capture their outer processor rather than assume the event argument retains subclass members. Code using instanceof DynamicProcessorImplementation for cleanup will miss mixin objects; structural lifecycle checks or an explicit identity contract are needed when integrating collections.
+- `waitToProcess` is declared and inert: invalidations are not debounced.
+- A failed child holds its parent; whether a parent should fail instead is a policy decision recorded in [validation](validation.md), not implemented.
+- Destroying a processor does not remove the subscribers it holds, and does not destroy its children.
+- `on()` reports an emitter that reached its maximum listeners, which is 500 by default, through the log; it does not refuse the subscription.
+- The prepared-but-blocked recursion of preparation, when the set of required children keeps changing, has no bound.
 
-Preserve the recognizable composition and hooks when repairing these issues. Copying a type surface is not proof of runtime forwarding, and flattening the implementation into unrelated utilities is unnecessary.
+## Build and validation
 
-## Errors, diagnostics and resource ownership
-
-An `_begin` rejection can leave initialising true and ready pending; ready's automatic initialization catch logs rather than rejects readiness. Synchronous preparation/processing errors propagate through their caller, potentially leaving flags set. Native Promise rejection from `_process` is logged and does not reject ready or restore state. Destruction during an awaited `_begin` has no post-await destroyed check. There is no failure event, retry budget, timeout for readiness, automatic rollback or cancellation of work.
-
-[Logs](../src/modules/main/logs/index.ts) opens `.beyond/dps/dp-<pid>-<time>.log`, buffers before initialization and reports slow processing above two seconds and high listener counts. Initialization failure only logs; subsequent messages can remain buffered indefinitely. There is no close method. [Checkpoints](../src/modules/main/children/monitor/checkpoint.ts) schedule five-second waiting diagnostics, but load the logging module through a namespace-style require while append is on its default export. That generated-module interop needs correction or explicit compatibility handling. Checkpoint cleanup is not part of monitor.destroy. The optional [monitor logger](../src/modules/main/children/monitor/logs.ts) is disabled and its selection filter never enables output as written.
-
-## Build, examples and validation
-
-[beyond.json](../beyond.json) selects [src/package.json](../src/package.json). That source manifest declares Node distributions on ports 1110/1111 and the public dependencies. Root [package.json](../package.json) declares development tooling. TypeScript [module configuration](../src/modules/main/tsconfig.json) requires Node types and no implicit any. Declaration files under source node_modules are generated support, not implementation authority; trash examples are historical material.
-
-The [interval example](../tests/interval.js) owns and clears its own timer. The four `test-dp-*.js` runners exercise an interval, named children, dynamic requirements and an unconnected child. They use legacy BEE at fixed local ports and log observations rather than assert a full regression suite. They require a separately running compatible Beyond compiler/dev server and installed dependencies. No test script wires them into npm test; they do not establish error recovery, field forwarding, cancellation races or leak freedom.
-
-The publication workflow builds an `npm` distribution, while the source manifest currently declares node/node-ts only. Do not treat that workflow as a standalone reproducible build recipe without resolving its distribution/toolchain contract. Build/publish is separate from testing and requires appropriate authorization.
-
-Validation for changes should cover first/change/destroy event order, delayed children, dynamic graph replacement, overlapping requests and guarded assignments, failed begin/process and retry, pending-ready destruction, base class collisions, actual mixin fields, child cleanup and timer/logger lifecycle. Test through the generated public module as well as isolated implementation where output/interop matters.
+[beyond.json](../beyond.json) selects [src/package.json](../src/package.json), which declares the Node distributions and the public dependencies. The [module tsconfig](../src/modules/main/tsconfig.json) requires Node types. The tests under [tests/](../tests/README.md) import the compiled public module; [validation](validation.md) is the contract-to-test matrix with what remains unverified.

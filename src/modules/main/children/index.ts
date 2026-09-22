@@ -41,7 +41,7 @@ export class Children extends Registered {
 	 * @param data {{id: string}} Information provided when the check function is called
 	 */
 	require(required: DynamicProcessorImplementation, data: { id: string }) {
-		if (this.dp === required) throw new Error('Requiring itself as a required processor');
+		if (this.dp === required || this.dp.self === required) throw new Error('Requiring itself as a required processor');
 		this.#required.register(required, data);
 	}
 

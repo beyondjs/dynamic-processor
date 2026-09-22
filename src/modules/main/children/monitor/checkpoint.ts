@@ -2,6 +2,11 @@ import type { Children } from '..';
 import * as colors from 'colors';
 import logs from '../../logs';
 
+/**
+ * The checkpoint of a processor that is waiting: when the children it needs, or its own preparation, keep it
+ * from processing longer than expected, the reason is written to the log of the dynamic processors, naming
+ * what it waits for and what has failed.
+ */
 export default class {
 	#children: Children;
 	#timer: NodeJS.Timeout | undefined;
@@ -23,46 +28,65 @@ export default class {
 		this.#logs = logs;
 	}
 
-	#checkpoint = () => {
+	/**
+	 * Whether the checkpoint is armed, which is the case while the processor waits
+	 */
+	get pending() {
+		return !!this.#timer;
+	}
+
+	/**
+	 * What the processor is waiting for, as the checkpoint would log it: the reason it is held, and each
+	 * pending child with its state, including the failure of a child that failed
+	 */
+	get report(): string {
 		const children = this.#children;
 		const { dp } = children;
-		const logs = this.#logs;
 
 		let id = dp.id ? `: ${dp.id}` : '';
-		id = `${dp.dp.bold}${id}`;
+		id = `${dp.dp}${id}`;
 
-		const warning =
-			`Dynamic processor "${id}" is taking more than expected.`.red +
-			(dp.initialising ? ' Processor is still initialising.' : '');
-		logs.append(warning);
-
-		this.#onhold && logs.append('\tBlocked by the following reason:', this.#onhold.bold);
+		const lines = [`Dynamic processor "${id}" is taking more than expected.` + (dp.initialising ? ' Processor is still initialising.' : '')];
+		this.#onhold && lines.push(`\tBlocked by the following reason: ${this.#onhold}`);
 
 		const { pending } = children;
-		pending.length && logs.append('\tWaiting for:'.bold);
+		pending.length && lines.push('\tWaiting for:');
 		pending.forEach(child => {
-			const processed = (() => {
+			const state = (() => {
+				if (child.error) return `failed: ${child.error.message}`;
 				if (!child.initialised) return 'not initialised';
 				return child.processed ? 'already processed' : 'not processed';
 			})();
-			logs.append(`\t\t* ${child.dp}: ${processed}`);
+			lines.push(`\t\t* ${child.dp}${child.id ? `: ${child.id}` : ''}: ${state}`);
 		});
-		logs.append('');
+		return lines.join('\n');
+	}
+
+	#checkpoint = () => {
+		this.#timer = void 0;
+		const report = this.report;
+		this.#logs.append(`${report.split('\n')[0].red}\n${report.split('\n').slice(1).join('\n')}\n`);
 	};
+
+	#arm() {
+		this.#timer && clearTimeout(this.#timer);
+		this.#timer = setTimeout(this.#checkpoint, this.#delay);
+
+		// A waiting processor must not keep a process alive on its own
+		this.#timer.unref?.();
+	}
 
 	hang(reason?: string) {
 		this.#onhold = reason ? reason : 'not specified';
-		this.#timer && clearTimeout(this.#timer);
-		this.#timer = setTimeout(this.#checkpoint, this.#delay);
+		this.#arm();
 	}
 
 	set() {
-		this.#timer && clearTimeout(this.#timer);
-		this.#timer = setTimeout(this.#checkpoint, this.#delay);
+		this.#arm();
 	}
 
 	release() {
-		clearTimeout(this.#timer);
+		this.#timer && clearTimeout(this.#timer);
 		this.#timer = this.#onhold = void 0;
 	}
 }
