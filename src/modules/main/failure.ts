@@ -37,18 +37,6 @@ export class ProcessorFailure extends Error {
 }
 
 /**
- * Reports an error raised by a subscriber or by a `_notify` hook. The processor's own bookkeeping is
- * complete by then, so the error is the consumer's and is reported rather than allowed to corrupt the
- * state of the processor that announced.
- */
-export function report(dp: string, id: string, what: string, error: unknown) {
-	const stack = error instanceof Error ? error.stack : String(error);
-	const message = `Dynamic processor "${dp}" (id "${id}"): ${what} threw`;
-	logs.append(`${message}\n${stack}\n`);
-	console.error(`${message}: ${error instanceof Error ? error.message : String(error)}`);
-}
-
-/**
  * The identity of a processor for a diagnostic, readable even when its `dp` getter throws, which is the case
  * of a subclass that did not define it
  */

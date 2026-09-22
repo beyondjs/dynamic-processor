@@ -1,9 +1,12 @@
 import type { DynamicProcessorImplementation } from '../dp';
+import type { RequireType } from '../types';
 import Registered from './registered';
 import Required from './required';
 import Monitor from './monitor';
 
-// A map of children where each child is an instance of a DynamicProcessor
+/**
+ * The children a processor registers with `setup`, by name: each entry holds a dynamic processor
+ */
 export /*bundle*/ type ChildrenType = Map<string, { child: DynamicProcessorImplementation }>;
 
 export class Children extends Registered {
@@ -47,6 +50,29 @@ export class Children extends Registered {
 
 	reset(): void {
 		return this.#required.reset();
+	}
+
+	/**
+	 * Runs the preparation hook of the parent against these children: the required children are collected
+	 * again, a processor the hook requires is registered and answers whether it is processed, and a string
+	 * answer is a reason that holds the parent, reported by the monitor
+	 *
+	 * @returns Whether the parent is prepared to process
+	 */
+	prepare(hook: (require: RequireType) => boolean | string | undefined | void): boolean {
+		this.reset();
+
+		// Requiring a processor also initialises it if it was not initialised before
+		const require: RequireType = (dp, id) => {
+			this.require(dp, { id });
+			return dp.processed;
+		};
+
+		const prepared = hook(require);
+		if (typeof prepared !== 'string') return prepared === void 0 ? true : !!prepared;
+
+		this.#monitor.hang(prepared);
+		return false;
 	}
 
 	get prepared() {

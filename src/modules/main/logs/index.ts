@@ -74,6 +74,14 @@ export class Logs {
 	}
 
 	/**
+	 * Records a processing that took longer than two seconds
+	 */
+	duration(dp: string, started: number) {
+		const ms = Date.now() - started;
+		ms > 2000 && this.append(`"${dp}" took ${ms} ms. to process`);
+	}
+
+	/**
 	 * Closes the file. A later append opens it again.
 	 */
 	close() {

@@ -1,4 +1,5 @@
-import type { DynamicProcessorImplementation, Listener } from './dp';
+import type { DynamicProcessorImplementation } from './dp';
+import type { Listener } from './types';
 import { EventEmitter } from 'events';
 import { registry } from './registry';
 import logs from './logs';

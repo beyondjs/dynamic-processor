@@ -1,3 +1,5 @@
+import { DynamicProcessor } from '@beyond-js/dynamic-processor/main';
+
 /**
  * Helpers shared by the tests of this utility. None of them waits for a length of time: a test awaits an
  * event, a promise it controls or a state it observes, and the runner's timeout bounds the wait.
@@ -33,4 +35,23 @@ export function watch(promise) {
 		() => (record.settled = true)
 	);
 	return record;
+}
+
+/**
+ * A processor that counts its runs and notifications and answers with `response`, which a test sets
+ */
+export class Counter extends DynamicProcessor() {
+	get dp() {
+		return 'test.counter';
+	}
+	runs = 0;
+	notified = 0;
+	response = void 0;
+	_process() {
+		this.runs++;
+		return this.response;
+	}
+	_notify() {
+		this.notified++;
+	}
 }

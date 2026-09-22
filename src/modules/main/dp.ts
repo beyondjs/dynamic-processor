@@ -1,43 +1,28 @@
 import type { EventEmitter } from 'events';
-import { PendingPromise } from '@beyond-js/pending-promise/main';
+import type { ProcessorFailure } from './failure';
 import { Children, ChildrenType } from './children';
-import { ProcessorFailure, identity } from './failure';
-import { announce } from './announcer';
-import type { Phase } from './failure';
+import { identity } from './failure';
+import { Attempts } from './attempts';
 import { Subscriptions } from './subscriptions';
 import { registry } from './registry';
-import { flags, slow } from './response';
-import logs from './logs';
+import type { IRequest, IProcessResponse, Listener, RequireType } from './types';
 
-export /*bundle*/ interface IRequest {
-	is: 'dynamic-processor';
-	value: number;
-}
-
-export /*bundle*/ type IProcessResponse = void | boolean | null | { notify?: boolean; changed?: boolean };
-
-export /*bundle*/ type Listener = (...args: any[]) => any;
-
-export /*bundle*/ type RequireType = (dp: DynamicProcessorImplementation, id?: string) => boolean;
-
-let autoincremental = { id: 0, request: 0 };
+let autoincremental = 0;
 
 /**
- * A readiness promise whose rejection is always observed: a failure is delivered to whoever awaits it, and a
- * processor nobody awaits does not end the process with an unhandled rejection
+ * The lifecycle of a dynamic processor: initialisation, preparation against the children it registers or
+ * requires, processing, invalidation, readiness, announcements and destruction.
+ *
+ * A subclass defines `dp` and implements the hooks `_begin`, `_prepared`, `_process` and `_notify`. The
+ * `DynamicProcessor` mixin composes this implementation into another class and forwards its prototype members,
+ * so a member the outer object must expose is a prototype accessor or method, never an instance field.
  */
-const readiness = () => {
-	const promise: PendingPromise<void> = new PendingPromise();
-	promise.catch(() => void 0);
-	return promise;
-};
-
 export /*bundle*/ class DynamicProcessorImplementation {
 	get dp(): string {
 		throw new Error('Getter .dp must be overriden by the subclass');
 	}
 
-	#autoincremented = autoincremental.id++;
+	#autoincremented = autoincremental++;
 	get autoincremented() {
 		return this.#autoincremented;
 	}
@@ -81,16 +66,20 @@ export /*bundle*/ class DynamicProcessorImplementation {
 		this.#children.register(children, false);
 	}
 
-	// Is a property that is defined only when processing and before initialised
-	#ready: PendingPromise<void> | undefined = readiness();
-	get ready(): Promise<void> {
-		if (this.#processed || this.#destroyed) return Promise.resolve();
+	readonly #attempts = new Attempts(this);
 
-		const ready = (this.#ready = this.#ready || readiness());
+	/**
+	 * Starts the processor and resolves once its processing completed; resolved at once for a processed or a
+	 * destroyed processor. A failure rejects it with a `ProcessorFailure`, and a later `ready` is a new attempt.
+	 */
+	get ready(): Promise<void> {
+		if (this.#attempts.processed || this.#destroyed) return Promise.resolve();
+
+		const ready = this.#attempts.ready;
 
 		// Initialization triggers processing, and promise resolution. A failure is delivered through the
 		// readiness promise, which a synchronous failure settles before this getter returns it.
-		!this.#initialising && !this.#initialised && this.initialise().catch(() => void 0);
+		!this.#initialising && !this.#initialised && this.initialise().catch((): void => void 0);
 		return ready;
 	}
 
@@ -99,13 +88,12 @@ export /*bundle*/ class DynamicProcessorImplementation {
 	 * processing nor processed; its `ready` rejected with this failure, and a later `ready` or invalidation
 	 * is a new attempt.
 	 */
-	#error: ProcessorFailure | undefined;
 	get error(): ProcessorFailure | undefined {
-		return this.#error;
+		return this.#attempts.error;
 	}
 
 	get failed() {
-		return !!this.#error;
+		return !!this.#attempts.error;
 	}
 
 	/**
@@ -125,19 +113,24 @@ export /*bundle*/ class DynamicProcessorImplementation {
 		return this.#subscriptions.emitter;
 	}
 
+	/** Subscribes a listener to an event of this processor, `change` among them */
 	on(event: string, listener: Listener) {
 		return this.#subscriptions.on(event, listener);
 	}
+	/** Releases a listener of an event of this processor */
 	off(event: string, listener: Listener) {
 		return this.#subscriptions.off(event, listener);
 	}
+	/** How many listeners an event of this processor has */
 	listenerCount(event: string) {
 		return this._events.listenerCount(event);
 	}
+	/** Releases every listener of an event, or of every event when none is named */
 	removeAllListeners(event?: string) {
 		// An explicit undefined would name an event called "undefined" to the Node emitter
 		return event === void 0 ? this._events.removeAllListeners() : this._events.removeAllListeners(event);
 	}
+	/** Sets how many listeners an event takes before the overflow is logged; 500 by default */
 	setMaxListeners(n: number) {
 		return this._events.setMaxListeners(n);
 	}
@@ -169,14 +162,14 @@ export /*bundle*/ class DynamicProcessorImplementation {
 	async initialise() {
 		if (this.#destroyed || this.#initialising || this.#initialised) return;
 		this.#initialising = true;
-		this.#error = void 0;
+		this.#attempts.clear();
 
 		try {
 			if (typeof this.dp !== 'string' || !this.dp) throw new Error('Getter .dp must return a string');
 			await this._begin();
 		} catch (exc) {
 			this.#initialising = false;
-			throw this.#fail('initialise', exc);
+			throw this.#attempts.fail('initialise', exc);
 		}
 
 		this.#initialising = false;
@@ -199,44 +192,29 @@ export /*bundle*/ class DynamicProcessorImplementation {
 	}
 
 	// Whether the processor is prepared to process; if not, the children call #preprocess again when ready
-	get __prepared(): boolean | string {
+	get __prepared(): boolean {
 		this.#preparing = true;
-		this.#children.reset();
-
-		// Check if dynamic processor is processed, but also initialise it if it wasn't previously initialised
-		const require: RequireType = (dp, id) => {
-			this.#children.require(dp, { id });
-			return dp.processed;
-		};
-
 		try {
-			let prepared = this._prepared(require);
-			if (typeof prepared === 'string') {
-				this.#children.monitor.hang(prepared);
-				prepared = false;
-			}
-			return prepared === void 0 ? true : !!prepared;
+			return this.#children.prepare(require => this._prepared(require));
 		} finally {
 			this.#preparing = false;
 		}
 	}
 
-	#first = true; // Is it the first notification?
+	// Whether the next completion is the first one
 	get first() {
-		return this.#first;
+		return this.#attempts.first;
 	}
 
 	// This method should be overridden
 	_notify() {}
 
-	#processing = false;
 	get processing() {
-		return this.#processing;
+		return this.#attempts.processing;
 	}
 
-	#processed = false;
 	get processed() {
-		return this.#processed;
+		return this.#attempts.processed;
 	}
 
 	// This method should be overridden
@@ -245,37 +223,18 @@ export /*bundle*/ class DynamicProcessorImplementation {
 		return;
 	}
 
-	#tu: number;
+	// The time of the last completion
 	get tu() {
-		return this.#tu;
+		return this.#attempts.tu;
 	}
 
-	#request: IRequest;
 	get _request() {
-		return this.#request;
+		return this.#attempts.request;
 	}
 
+	/** Whether a request is no longer the current one: an implementation checks it before its own side effects */
 	cancelled(request: IRequest) {
-		return this.#request !== request;
-	}
-
-	/**
-	 * Records the failure of the current attempt, rejects whoever awaits readiness and reports it.
-	 * A failure of an attempt that is no longer current is reported but changes nothing.
-	 */
-	#fail(phase: Phase, cause: unknown, request?: IRequest): ProcessorFailure {
-		const { dp, id } = this.identity;
-		const failure = new ProcessorFailure(dp, id, phase, cause);
-		failure.report();
-		if (request && this.#request !== request) return failure;
-
-		this.#processing = false;
-		this.#error = failure;
-
-		const ready = this.#ready;
-		this.#ready = void 0;
-		ready?.reject(failure);
-		return failure;
+		return this.#attempts.cancelled(request);
 	}
 
 	/**
@@ -283,20 +242,13 @@ export /*bundle*/ class DynamicProcessorImplementation {
 	 */
 	#preprocess = () => {
 		if (this.#destroyed) return;
+		this.#attempts.begin();
 
-		this.#processed = false;
-		this.#processing = true;
-		this.#error = void 0;
-
-		// From here on, a completion of an earlier attempt is stale, whether or not this attempt gets to
-		// allocate a request of its own: an attempt blocked in preparation must not adopt an older result
-		this.#request = void 0;
-
-		let prepared: boolean | string;
+		let prepared: boolean;
 		try {
 			prepared = this.__prepared;
 		} catch (exc) {
-			this.#fail('prepare', exc);
+			this.#attempts.fail('prepare', exc);
 			return;
 		}
 
@@ -313,49 +265,10 @@ export /*bundle*/ class DynamicProcessorImplementation {
 		// If not prepared, the children is responsible to call #preprocess again when ready
 		if (!prepared || !this.#children.prepared) return;
 
-		const request = (this.#request = { is: 'dynamic-processor', value: autoincremental.request++ });
+		this.#attempts.run();
+	};
 
-		const started = Date.now();
-
-		/**
-		 * Once process is completed
-		 *
-		 * @param pr? The process response
-		 */
-		const done = (pr?: IProcessResponse): void => {
-			if (this.#request !== request) return;
-
-			const { changed, notify } = flags(pr);
-			this.#tu = Date.now(); // The time updated
-			slow(this.dp, started);
-			this.#processing = false;
-			this.#processed = !this.#destroyed;
-
-			const ready = this.#ready;
-			this.#ready = void 0;
-			ready?.resolve();
-
-			const first = this.#first;
-			this.#first = false;
-			announce(this, changed, notify, first);
-		};
-
-		// The process response. A thenable is awaited, whether or not it is a native Promise.
-		let pr: IProcessResponse | Promise<IProcessResponse>;
-		try {
-			pr = this._process(request);
-		} catch (exc) {
-			this.#fail('process', exc, request);
-			return;
-		}
-
-		if (pr && typeof (<Promise<IProcessResponse>>pr).then === 'function') {
-			Promise.resolve(pr).then(done, exc => this.#fail('process', exc, request));
-		} else {
-			done(<IProcessResponse>pr);
-		}
-	}
-
+	/** Starts a new attempt of an initialised processor that is not preparing */
 	_invalidate() {
 		this.#initialised && !this.#preparing && this.#preprocess();
 	}
@@ -371,17 +284,9 @@ export /*bundle*/ class DynamicProcessorImplementation {
 	 */
 	destroy() {
 		if (this.#destroyed) throw new Error('Object is already destroyed');
-		this.#request = void 0;
 		this.#children.destroy();
 		this.#destroyed = true;
-		this.#processing = false;
 		registry.delete(this);
-
-		// An awaiter of a destroyed processor is released, as `ready` answers for a destroyed one
-		const ready = this.#ready;
-		this.#ready = void 0;
-		ready?.resolve();
-
-		announce(this, true, false, false);
+		this.#attempts.destroy();
 	}
 }

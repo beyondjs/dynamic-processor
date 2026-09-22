@@ -19,9 +19,9 @@ Run directly, the files are `node --import "$BEE_NODE_DIR/register.mjs" --test t
 | A promise and a non-native thenable are awaited | `lifecycle` 5 | `async _process`; an object with `then` | value set before adoption |
 | A newer invalidation drops the older completion | `lifecycle` 6 | 60 ms and 5 ms attempts | only the newer published |
 | A completion of an attempt superseded while preparation is blocked is dropped | `lifecycle` 7 | Parent invalidated while its required child is unprocessed | `_request` undefined while blocked; first completion not published; second published |
-| Registered children start with the parent, reprocess it, and are released on unregister | `lifecycle` 8 | `setup(new Map([['child', …]]))` | child processed; one subscription; reprocessed on child change; zero subscriptions after unregister; child not destroyed |
-| Required children are waited for; a string reason holds | `lifecycle` 9 | A dependency that completes on release; `_prepared` returning a string | pending names the child; held until the reason is gone |
-| Two parents sharing a child are each reprocessed once | `lifecycle` 10 | Two parents requiring one child | both run twice |
+| Registered children start with the parent, reprocess it, and are released on unregister | `children` 1 | `setup(new Map([['child', …]]))` | child processed; one subscription; reprocessed on child change; zero subscriptions after unregister; child not destroyed |
+| Required children are waited for; a string reason holds | `children` 2 | A dependency that completes on release; `_prepared` returning a string | pending names the child; held until the reason is gone |
+| Two parents sharing a child are each reprocessed once | `children` 3 | Two parents requiring one child | both run twice |
 | A base constructor keeps its arguments and members; `Map` composes | `composition` 1, 2 | `DynamicProcessor(Named)`, `DynamicProcessor(Map)` | base members and `instanceof Base` kept; not `instanceof` the implementation |
 | The outer emitter is the one subscribers registered on | `composition` 3 | A subclass emitting through `_events` | the subscriber of the outer object hears it |
 | `setMaxListeners`, `removeAllListeners`, `listenerCount` are forwarded | `composition` 4 | Calls on the outer object | applied to the implementation |

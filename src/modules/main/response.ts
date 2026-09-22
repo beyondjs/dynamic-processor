@@ -1,5 +1,4 @@
-import type { IProcessResponse } from './dp';
-import logs from './logs';
+import type { IProcessResponse } from './types';
 
 /**
  * What a processing response means: a boolean, null or undefined sets both flags, an object sets each one,
@@ -11,12 +10,4 @@ export function flags(pr: IProcessResponse): { changed: boolean; notify: boolean
 		notify: given.notify === void 0 ? true : !!given.notify,
 		changed: given.changed === void 0 ? true : !!given.changed
 	};
-}
-
-/**
- * Records a processing that took longer than two seconds
- */
-export function slow(dp: string, started: number) {
-	const ms = Date.now() - started;
-	ms > 2000 && logs.append(`"${dp}" took ${ms} ms. to process`);
 }
