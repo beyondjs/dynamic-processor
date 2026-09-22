@@ -2,6 +2,9 @@
 
 Canonical instructions for this independent repository and its descendants. Read the local README and relevant guides before changing code. This utility is authored with Beyond and must preserve its public package and module boundaries.
 
+On 2026-09-22 the event emitter moved from an instance field to a prototype accessor. The mixin forwards prototype members only, so a subclass that emits an event of its own — `@beyond-js/finder` does — read `undefined` there and every such emit threw. Keep `_events` reachable through the prototype, and do not turn it back into an instance field.
+
+**A repair here does not reach a consumer.** Packages resolves this package from the public registry, in its checkout and in an installation alike, and the toolchain installer does not pack it. Even the one path that copies a checkout into an image — the Packages bootstrap's prepack — serves the copy while the client that runs is still the published one. Delivering a change from here needs a new published version, which is an owner decision; until then, treat a fix in these sources as unexercised by anything that runs. The Beyond Suite record `docs/reviews/2026-09-22/packages-pages-editor-production-evidence.md` holds the evidence for that date; it is an optional external reference, not a link from here.
 - Preserve the selected branch, existing changes and public identifiers. Do not commit, push, reset, deploy or publish without explicit authorization.
 - Use English for first-party documentation, comments and explanatory text. Preserve functional strings and generated/vendor content.
 - Keep documentation autonomous: relative links stay inside this repository; external packages are described as contracts with optional references.

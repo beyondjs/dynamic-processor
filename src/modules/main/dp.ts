@@ -68,7 +68,17 @@ export /*bundle*/ class DynamicProcessorImplementation {
 		return this.#ready;
 	}
 
-	_events = new EventEmitter();
+	/**
+	 * The emitter of the events of this processor. It is reached through an accessor on the prototype, and
+	 * not held as an instance field, because the mixin forwards prototype members only: an outer subclass
+	 * that emits an event of its own — the finder does — would otherwise read `undefined` here while its
+	 * subscribers were registered on this emitter, and every emit of that subclass would throw.
+	 */
+	readonly #emitter = new EventEmitter();
+	get _events(): EventEmitter {
+		return this.#emitter;
+	}
+
 	on(event: string, listener: Listener) {
 		// To find if a dynamic processor hasn't set the maxListeners correctly
 		const count = this._events.listenerCount(event);
