@@ -20,7 +20,11 @@ export class ProcessorFailure extends Error {
 
 	constructor(dp: string, id: string, phase: Phase, cause: unknown) {
 		const reason = cause instanceof Error ? cause.message : String(cause);
-		super(`Dynamic processor "${dp}" (id "${id}") failed while ${phase}: ${reason}`, { cause });
+		super(`Dynamic processor "${dp}" (id "${id}") failed while ${phase}: ${reason}`);
+
+		// An own property, as `new Error(message, { cause })` defines it, so that Node prints it with the stack.
+		// It is not passed as that option because the tsc distribution of this package does not accept it.
+		Object.defineProperty(this, 'cause', { value: cause, writable: true, enumerable: false, configurable: true });
 		this.name = 'ProcessorFailure';
 		this.#phase = phase;
 	}
