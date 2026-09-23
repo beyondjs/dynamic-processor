@@ -24,3 +24,20 @@ These files follow the normative conventions of the Beyond Suite testing guide (
 | `composition.test.mjs` | The mixin with a base class and with `Map`, the emitter of the outer object, forwarded listener members, `notifyOnFirst`, the detached `_invalidate`, the `change` payload, hook order, child validation |
 | `failures.test.mjs` | Rejected `_begin`, missing `dp`, throwing and rejecting `_process`, unobserved failures, throwing subscribers and `_notify`, a failed child in the checkpoint report, destruction with a pending readiness and during `_begin` |
 | `resources.test.mjs` | The lazy log, timers and subscriptions after repeated creation and destruction, the checkpoint timer |
+
+## Fixtures and inline inputs
+
+There are no fixture files; the processors under test are small classes declared inside each test. `support.mjs` is shared harness support, kept as one file in `tests/` beside the tests it serves.
+
+`resources.test.mjs` passes a three-line ESM probe to `node --input-type=module -e` in a fresh temporary working directory. It must run in a fresh process, because what it proves is that importing the module creates no `.beyond/dps` directory until something is logged; the probe is small inline input and needs no file of its own.
+
+## Test organization and source fixtures
+
+These rules are shared by every Beyond repository.
+
+- Contract/unit and integration tests live in `test/` or `tests/`; complete journeys against an installed, composed or exported product live in `acceptance/`, with a README of their own. Harness infrastructure (servers, registries, process lifecycle, copying and substitution) lives in a `support/` directory of the consuming area.
+- Applications, packages, modules, documents and assets a test exercises are checked-in files with their real extensions and directory structure under the consuming area's `fixtures/`. Each fixture group has a README naming its purpose, entry modules, the tests that use it, their command, the expected behavior and any intentionally invalid part. A reader inspects the example without running or decoding a generator.
+- A harness copies the fixtures it runs or edits to a unique temporary directory, substitutes only explicit values such as versions, ports or origins, and never writes the checked-in files, even when a run fails. Credentials, machine paths and build output are never fixture source.
+- Small input values, expected values, protocol payloads and short edits stay inline. Source is generated only when generation is the behavior under test (size or memory stress, combinations, deliberately malformed input); the guide states why, the parameters that reproduce it and how to inspect what was generated.
+- Fixtures stay out of the repository's production compilation, discovery and packaging.
+- Migrating a test preserves its scenario identities, its positive, negative and recovery cases and its real execution path; an existing failure stays reported as a failure.
